@@ -1,0 +1,40 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  profile: dev
+  admin: af72afa2-7a70-4a2f-93ac-905d36044526
+  version: "0.1.0"
+  metrics:
+    enabled: true
+    port: 9090
+  http:
+    timeout: 60
+
+auth:
+  enabled: true
+  api_key: "3a563319-283a-4f3d-8c3c-954629daa1d4"
+
+postgres:
+  host: "127.0.0.1"
+  port: 5432
+  username: "notification"
+  password: ""
+  database: "notification"
+  max_pool_size: 10
+
+kafka:
+  enabled: true
+  brokers:
+    - "localhost:9092"
+  client_id: "notification"
+  sasl:
+    mechanism: SASL_PLAINTEXT
+    username: "notification"
+    password: ""
+  topics:
+    send: "notification.send"
+  consumer:
+    enabled: true
+    max_wait_ms: 1000
+    max_poll_records: 100
+    start_offset: latest

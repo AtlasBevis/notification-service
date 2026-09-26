@@ -1,0 +1,60 @@
+# stages:
+#   - build-uat
+#   - deploy-uat
+#   - build-prod
+#   - deploy-prod
+
+# build_uat:
+#   stage: build-uat
+#   variables:
+#     IMAGE_REPO: ${DATA_API_GW_IMAGE}-uat
+#     IMAGE_TAG: ${CI_COMMIT_SHA}
+#   script:
+#     - /opt/ci/build.sh
+#   tags:
+#     - build
+#   only:
+#     - uat
+
+# build_prod:
+#   stage: build-prod
+#   variables:
+#     IMAGE_REPO: ${DATA_API_GW_IMAGE}
+#     IMAGE_TAG: ${CI_COMMIT_SHA}
+#   script:
+#     - /opt/ci/build.sh
+#   tags:
+#     - build
+#   only:
+#     - master
+
+# deploy_uat:
+#   stage: deploy-uat
+#   variables:
+#     GIT_STRATEGY: none
+#     PROJECT: data-api-gw
+#     IMAGE_TAG: ${CI_COMMIT_SHA}
+#     CHART_REPO: ${DATA_API_GW_CHART}
+#     VALUES_FILE: values-uat.yaml
+#     TARGET_BRANCH: master
+#   script:
+#     - /opt/ci/deploy.sh
+#   tags:
+#     - deploy
+#   only:
+#     - uat
+
+# deploy_prod:
+#   stage: deploy-prod
+#   variables:
+#     GIT_STRATEGY: none
+#     PROJECT: data-api-gw
+#     IMAGE_TAG: ${CI_COMMIT_SHA}
+#     CHART_REPO: ${DATA_API_GW_CHART}
+#     TARGET_BRANCH: master
+#   script:
+#     - /opt/ci/deploy.sh
+#   tags:
+#     - deploy
+#   only:
+#     - master

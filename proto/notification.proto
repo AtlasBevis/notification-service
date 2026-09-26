@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package notification.v1;
+
+service Notification {
+  rpc Send(SendRequest) returns (SendReply);
+}
+
+message SendRequest {
+  string app = 1;
+}
+
+message SendReply {
+  string message = 1;
+}

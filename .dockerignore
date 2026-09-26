@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Rust build output (large; rebuilt inside image)
+target/
+
+# Docker metadata (not needed in build context)
+Dockerfile*
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# Docs & project notes
+docs/
+README.md
+context.md
+*.md
+!instantclient/BASIC_README
+
+# Dev / CI scripts (not compiled into binary)
+test/
+Makefile
+monitoring/
+
+# K8s manifests (deployed separately)
+k8s/
+
+# Runtime artifacts from local dev
+app.log
+app.pid
+*.log
+check_error*.log
+
+# Local secrets & overrides (mount at runtime via compose/k8s)
+.env
+.env.*
+config.local.yaml
+config.*.local.yaml
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Python cache (under test/)
+**/__pycache__/
+**/*.py[cod]
+.venv/
+venv/

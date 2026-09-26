@@ -1,0 +1,48 @@
+[package]
+name = "data-notification"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+anyhow = "1.0"
+bytes = "1.0"
+futures = { version = "0.3", features = ["executor", "thread-pool"] }
+chrono = { version = "0.4", features = ["serde"] }
+rskafka = "0.6"
+http-body-util = "0.1"
+utoipa = "4.2"
+utoipa-swagger-ui = { version = "6.0", features = ["axum"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+async-trait = "0.1"
+base64 = "0.22"
+metrics = "0.24.6"
+metrics-exporter-prometheus = "0.18.3"
+uuid = { version = "1.24.0", features = ["v4", "serde"] }
+reqwest-middleware = "0.5.2"
+http = "1"
+lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "smtp-transport", "tokio1-rustls-tls"] }
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
+deadpool-postgres = { version = "0.14", features = ["rt_tokio_1"] }
+tonic = "0.14.6"
+tonic-prost = "0.14.6"
+prost = "0.14.4"
+
+[[bin]]
+name = "data-notification"
+path = "src/main.rs"
+
+[[bin]]
+name = "notification-consumer"
+path = "src/bin/notification_consumer.rs"
+
+[build-dependencies]
+prost-build = "0.14.4"
+protoc-bin-vendored = "3"
+tonic-prost-build = "0.14.6"
