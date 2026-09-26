@@ -1,4 +1,5 @@
 use axum::response::{IntoResponse, Response as AxumResponse};
+use serde::Serialize;
 use tokio_postgres::error::SqlState;
 
 use crate::models::ApiResponse;
@@ -30,7 +31,10 @@ impl AppError {
         Self::Internal(msg.into())
     }
 
-    pub fn to_response(self) -> ApiResponse<()> {
+    pub fn to_response<T>(self) -> ApiResponse<T>
+    where
+        T: Serialize,
+    {
         match self {
             Self::BadRequest(msg) => ApiResponse::bad_request(msg),
             Self::NotFound(msg) => ApiResponse::not_found(msg),
@@ -75,6 +79,6 @@ impl From<tokio_postgres::Error> for AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> AxumResponse {
-        self.to_response().into_response()
+        self.to_response::<()>().into_response()
     }
 }

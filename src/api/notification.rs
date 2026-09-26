@@ -1,6 +1,6 @@
-use crate::error::{AppError, AppResult};
 use crate::models::{
-    ApiRequest, ApiResponse, CreateNotificationRequest, NotificationData, UpdateNotificationRequest,
+    ApiRequest, ApiResponse, CreateNotificationRequest, NotificationData, PageData,
+    UpdateNotificationRequest,
 };
 use crate::services::NotificationServiceTrait;
 use crate::state::SharedState;
@@ -12,7 +12,7 @@ use axum::extract::{Path, State};
     tag = "Notification",
     operation_id = "list_notifications",
     responses(
-        (status = 200, description = "OK", body = Vec<NotificationData>),
+        (status = 200, description = "OK", body = PageData<NotificationData>),
         (status = 401, description = "Unauthorized")
     ),
     security(
@@ -21,9 +21,11 @@ use axum::extract::{Path, State};
 )]
 pub async fn list_notifications(
     State(state): State<SharedState>,
-) -> AppResult<ApiResponse<Vec<NotificationData>>> {
-    let data = state.notification_service.list().await?;
-    Ok(ApiResponse::success(data))
+) -> ApiResponse<PageData<NotificationData>> {
+    match state.notification_service.list().await {
+        Ok(data) => ApiResponse::success(PageData::from_items(data)),
+        Err(err) => err.to_response(),
+    }
 }
 
 #[utoipa::path(
@@ -45,11 +47,16 @@ pub async fn list_notifications(
 pub async fn create_notification(
     State(state): State<SharedState>,
     ApiRequest(mut payload): ApiRequest<CreateNotificationRequest>,
-) -> AppResult<ApiResponse<NotificationData>> {
+) -> ApiResponse<NotificationData> {
     payload.normalize();
-    payload.validate().map_err(AppError::BadRequest)?;
-    let data = state.notification_service.create(payload).await?;
-    Ok(ApiResponse::created(data))
+    if let Err(msg) = payload.validate() {
+        return ApiResponse::bad_request(msg);
+    }
+
+    match state.notification_service.create(payload).await {
+        Ok(data) => ApiResponse::created(data),
+        Err(err) => err.to_response(),
+    }
 }
 
 #[utoipa::path(
@@ -73,13 +80,16 @@ pub async fn create_notification(
 pub async fn get_notification(
     State(state): State<SharedState>,
     Path(code): Path<String>,
-) -> AppResult<ApiResponse<NotificationData>> {
+) -> ApiResponse<NotificationData> {
     let key = code.trim().to_ascii_uppercase();
     if key.is_empty() {
-        return Err(AppError::bad_request("code is required"));
+        return ApiResponse::bad_request("code is required");
     }
-    let data = state.notification_service.get_by_code(&key).await?;
-    Ok(ApiResponse::success(data))
+
+    match state.notification_service.get_by_code(&key).await {
+        Ok(data) => ApiResponse::success(data),
+        Err(err) => err.to_response(),
+    }
 }
 
 #[utoipa::path(
@@ -105,15 +115,21 @@ pub async fn update_notification(
     State(state): State<SharedState>,
     Path(code): Path<String>,
     ApiRequest(mut payload): ApiRequest<UpdateNotificationRequest>,
-) -> AppResult<ApiResponse<NotificationData>> {
+) -> ApiResponse<NotificationData> {
     let key = code.trim().to_ascii_uppercase();
     if key.is_empty() {
-        return Err(AppError::bad_request("code is required"));
+        return ApiResponse::bad_request("code is required");
     }
+
     payload.normalize();
-    payload.validate().map_err(AppError::BadRequest)?;
-    let data = state.notification_service.update(&key, payload).await?;
-    Ok(ApiResponse::success(data))
+    if let Err(msg) = payload.validate() {
+        return ApiResponse::bad_request(msg);
+    }
+
+    match state.notification_service.update(&key, payload).await {
+        Ok(data) => ApiResponse::success(data),
+        Err(err) => err.to_response(),
+    }
 }
 
 #[utoipa::path(
@@ -138,11 +154,14 @@ pub async fn update_notification(
 pub async fn delete_notification(
     State(state): State<SharedState>,
     Path(code): Path<String>,
-) -> AppResult<ApiResponse<()>> {
+) -> ApiResponse {
     let key = code.trim().to_ascii_uppercase();
     if key.is_empty() {
-        return Err(AppError::bad_request("code is required"));
+        return ApiResponse::bad_request("code is required");
     }
-    state.notification_service.delete(&key).await?;
-    Ok(ApiResponse::ok())
+
+    match state.notification_service.delete(&key).await {
+        Ok(()) => ApiResponse::ok(),
+        Err(err) => err.to_response(),
+    }
 }

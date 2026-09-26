@@ -2,8 +2,8 @@ use crate::api::{notification, notify, sources, targets, templates};
 use crate::enums::NotificationStatus;
 use crate::models::{
     CreateNotificationRequest, CreateSourceRequest, CreateTargetRequest, CreateTemplateRequest,
-    NotificationData, NotifyRequest, PatchMetadataRequest, Recipients, SourceData, TargetData,
-    TemplateData, UpdateNotificationRequest,
+    NotificationData, NotifyRequest, PageData, PatchMetadataRequest, Recipients, SourceData,
+    TargetData, TemplateData, UpdateNotificationRequest,
 };
 use utoipa::OpenApi;
 
@@ -38,6 +38,7 @@ use utoipa::OpenApi;
             CreateNotificationRequest,
             UpdateNotificationRequest,
             NotificationData,
+            PageData<NotificationData>,
             Recipients,
             CreateSourceRequest,
             CreateTargetRequest,

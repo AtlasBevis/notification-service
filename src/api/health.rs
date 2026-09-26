@@ -1,12 +1,9 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::extract::State;
+use axum::http::StatusCode;
 use serde::Serialize;
 
 use crate::config;
+use crate::models::ApiResponse;
 use crate::state::SharedState;
 
 #[derive(Serialize)]
@@ -24,7 +21,7 @@ pub struct HealthResponse {
     pub kafka: DependencyStatus,
 }
 
-pub async fn health(State(state): State<SharedState>) -> impl IntoResponse {
+pub async fn health(State(state): State<SharedState>) -> ApiResponse<HealthResponse> {
     let server = &config::load().server;
     let kafka_enabled = config::load().kafka.enabled;
 
@@ -76,11 +73,14 @@ pub async fn health(State(state): State<SharedState>) -> impl IntoResponse {
         kafka,
     };
 
-    let status = if ok {
-        StatusCode::OK
+    if ok {
+        ApiResponse::success(body)
     } else {
-        StatusCode::SERVICE_UNAVAILABLE
-    };
-
-    (status, Json(body))
+        ApiResponse::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            StatusCode::SERVICE_UNAVAILABLE.as_u16(),
+            "Service Unavailable",
+            Some(body),
+        )
+    }
 }

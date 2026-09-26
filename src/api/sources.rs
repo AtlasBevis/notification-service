@@ -1,4 +1,3 @@
-use crate::error::{AppError, AppResult};
 use crate::models::{ApiRequest, ApiResponse, CreateSourceRequest, PatchMetadataRequest, SourceData};
 use crate::services::SourcesServiceTrait;
 use crate::state::SharedState;
@@ -25,17 +24,17 @@ use axum::extract::{Path, State};
 pub async fn get_source(
     State(state): State<SharedState>,
     Path(code): Path<String>,
-) -> AppResult<ApiResponse<SourceData>> {
+) -> ApiResponse<SourceData> {
     let key = code.trim().to_ascii_uppercase();
     if key.is_empty() {
-        return Err(AppError::bad_request("code is required"));
+        return ApiResponse::bad_request("code is required");
     }
-    let data = state
-        .sources_service
-        .get_by_code(&key)
-        .await?
-        .ok_or_else(|| AppError::not_found(format!("source `{key}` not found")))?;
-    Ok(ApiResponse::success(data))
+
+    match state.sources_service.get_by_code(&key).await {
+        Ok(Some(data)) => ApiResponse::success(data),
+        Ok(None) => ApiResponse::not_found(format!("source `{key}` not found")),
+        Err(err) => err.to_response(),
+    }
 }
 
 #[utoipa::path(
@@ -57,11 +56,16 @@ pub async fn get_source(
 pub async fn create_source(
     State(state): State<SharedState>,
     ApiRequest(mut payload): ApiRequest<CreateSourceRequest>,
-) -> AppResult<ApiResponse<()>> {
+) -> ApiResponse {
     payload.normalize();
-    payload.validate().map_err(AppError::BadRequest)?;
-    state.sources_service.create(payload).await?;
-    Ok(ApiResponse::created(()))
+    if let Err(msg) = payload.validate() {
+        return ApiResponse::bad_request(msg);
+    }
+
+    match state.sources_service.create(payload).await {
+        Ok(()) => ApiResponse::created(()),
+        Err(err) => err.to_response(),
+    }
 }
 
 #[utoipa::path(
@@ -83,9 +87,14 @@ pub async fn create_source(
 pub async fn patch_metadata(
     State(state): State<SharedState>,
     ApiRequest(mut payload): ApiRequest<PatchMetadataRequest>,
-) -> AppResult<ApiResponse<()>> {
+) -> ApiResponse {
     payload.normalize();
-    payload.validate().map_err(AppError::BadRequest)?;
-    state.sources_service.patch_metadata(payload).await?;
-    Ok(ApiResponse::ok())
+    if let Err(msg) = payload.validate() {
+        return ApiResponse::bad_request(msg);
+    }
+
+    match state.sources_service.patch_metadata(payload).await {
+        Ok(()) => ApiResponse::ok(),
+        Err(err) => err.to_response(),
+    }
 }

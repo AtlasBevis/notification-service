@@ -1,6 +1,7 @@
 mod channel;
 mod delivery;
 mod notification;
+mod page;
 mod notify_request;
 mod outbox;
 mod source;
@@ -12,6 +13,7 @@ pub mod api_response;
 
 pub use api_request::ApiRequest;
 pub use api_response::ApiResponse;
+pub use page::PageData;
 pub use channel::ChannelData;
 pub use delivery::DeliveryData;
 pub use notification::{CreateNotificationRequest, NotificationData, UpdateNotificationRequest};
