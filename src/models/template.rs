@@ -39,6 +39,7 @@ impl TemplateData {
         flatten_variables(variables, &mut vars);
 
         let escape_json = self.format.eq_ignore_ascii_case("ADAPTIVE_CARD");
+        
         let title = truncate_chars(&render_placeholders(&self.title, &vars, false), 255);
         vars.insert("title".to_string(), title.clone());
         let content = render_placeholders(&self.content, &vars, escape_json);
@@ -50,16 +51,22 @@ fn flatten_variables(variables: &Map<String, Value>, out: &mut HashMap<String, S
     flatten_object(None, variables, out);
 }
 
-fn flatten_object(prefix: Option<&str>, obj: &Map<String, Value>, out: &mut HashMap<String, String>) {
+fn flatten_object(
+    prefix: Option<&str>,
+    obj: &Map<String, Value>,
+    out: &mut HashMap<String, String>,
+) {
     for (key, value) in obj {
         let path = match prefix {
             Some(p) => format!("{p}.{key}"),
             None => key.clone(),
         };
+
         match value {
             Value::Object(child) => flatten_object(Some(&path), child, out),
             other => insert(out, &path, &value_to_string(other)),
         }
+
         if prefix.is_none() {
             insert(out, key, &value_to_string(value));
         }
@@ -80,7 +87,11 @@ fn insert(out: &mut HashMap<String, String>, key: &str, value: &str) {
     out.insert(key.to_string(), value.to_string());
 }
 
-fn render_placeholders(template: &str, vars: &HashMap<String, String>, escape_json: bool) -> String {
+fn render_placeholders(
+    template: &str,
+    vars: &HashMap<String, String>,
+    escape_json: bool,
+) -> String {
     let mut out = String::with_capacity(template.len());
     let mut rest = template;
     while let Some(start) = rest.find("{{") {

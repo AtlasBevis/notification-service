@@ -57,8 +57,8 @@ impl OutboxService {
                         .publish_json(
                             &row.topic,
                             &row.partition_key,
-                            &msg.context.source,
-                            &msg.context.kind,
+                            &msg.value.source,
+                            &msg.value.kind,
                             EVENT_TYPE_SEND,
                             &msg,
                         )

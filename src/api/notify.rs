@@ -32,11 +32,12 @@ pub async fn notify(
     }
 
     let svc = state.notify_service.clone();
-    if let Err(err) = svc.validate(payload.clone()).await {
-        return err.to_response();
-    }
+    let message = match svc.validate(payload).await {
+        Ok(message) => message,
+        Err(err) => return err.to_response(),
+    };
 
-    if let Err(err) = svc.notify(payload).await {
+    if let Err(err) = svc.notify(message).await {
         return err.to_response();
     }
 

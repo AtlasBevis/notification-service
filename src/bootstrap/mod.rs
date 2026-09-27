@@ -5,7 +5,7 @@ use crate::config::Config;
 use crate::infras::Infrastructure;
 use crate::repository::{
     ChannelsRepository, DeliveriesRepository, NotificationsRepository, OutboxRepository,
-    RequestsRepository, SourcesRepository, TargetsRepository, TemplatesRepository,
+    SourcesRepository, TargetsRepository, TemplatesRepository,
 };
 use crate::services::{
     ChannelsService, ChannelsServiceTrait, NotificationService, NotifyService, OutboxService,
@@ -23,7 +23,6 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
     let targets_repo = TargetsRepository::new(pool.clone());
     let templates_repo = TemplatesRepository::new(pool.clone());
     let notifications_repo = NotificationsRepository::new(pool.clone());
-    let requests_repo = RequestsRepository::new(pool.clone());
     let deliveries_repo = DeliveriesRepository::new(pool.clone());
     let outbox_repo = OutboxRepository::new(pool);
 
@@ -56,7 +55,6 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
         infras.kafka.clone(),
         infras.http_client.clone(),
         notification_service.clone(),
-        requests_repo,
         deliveries_repo,
         outbox_repo.clone(),
         sources_service.clone(),
@@ -123,7 +121,6 @@ pub async fn build_notification_consumer(config: &Config) -> Result<Arc<NotifySe
         Some(kafka),
         infras.http_client,
         notification_service,
-        RequestsRepository::new(pool.clone()),
         DeliveriesRepository::new(pool.clone()),
         OutboxRepository::new(pool),
         sources_service,
