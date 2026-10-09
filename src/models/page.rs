@@ -1,8 +1,7 @@
 use serde::Serialize;
-use utoipa::ToSchema;
 
 /// Paginated payload: `Data` is `{ list, total }`.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PageData<T> {
     pub list: Vec<T>,
     pub total: i64,

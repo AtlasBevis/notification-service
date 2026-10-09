@@ -3,8 +3,10 @@ use crate::enums::NotificationStatus;
 use crate::error::{AppError, AppResult};
 use crate::infras::http::HttpClient;
 use crate::infras::kafka::KafkaBus;
-use crate::models::{NotificationData, NotifyMessage, NotifyRequest, NotifyValue};
-use crate::repository::{DeliveriesRepository, OutboxRepository};
+use crate::models::{
+    NotificationData, NotifyMessage, NotifyRequest, NotifyValue, EVENT_TYPE_SEND,
+};
+use crate::repository::DeliveriesRepository;
 use crate::services::notification::NotificationService;
 use crate::services::templates::wrap_teams_message;
 use crate::services::{
@@ -36,7 +38,6 @@ pub struct NotifyService {
     http: Arc<HttpClient>,
     notifications: Arc<NotificationService>,
     deliveries: DeliveriesRepository,
-    outbox: OutboxRepository,
     sources: Arc<SourcesService>,
     targets: Arc<TargetsService>,
     channels: Arc<ChannelsService>,
@@ -49,7 +50,6 @@ impl NotifyService {
         http: Arc<HttpClient>,
         notifications: Arc<NotificationService>,
         deliveries: DeliveriesRepository,
-        outbox: OutboxRepository,
         sources: Arc<SourcesService>,
         targets: Arc<TargetsService>,
         channels: Arc<ChannelsService>,
@@ -60,7 +60,6 @@ impl NotifyService {
             http,
             notifications,
             deliveries,
-            outbox,
             sources,
             targets,
             channels,
@@ -359,63 +358,63 @@ impl NotifyServiceTrait for NotifyService {
             .unwrap_or_else(|_| Value::Object(Default::default()));
         let metadata = Value::Object(Default::default());
 
+        if let Err(err) = self
+            .deliveries
+            .insert(
+                value.notification_id,
+                correlation_id,
+                &value.kind,
+                &title,
+                &rendered,
+                &recipients,
+                &value.payload,
+                &metadata,
+            )
+            .await
+        {
+            tracing::error!(error = %err, code = %value.code, "insert delivery failed");
+            return Err(match err {
+                AppError::Conflict(_) => AppError::conflict(format!(
+                    "delivery already exists for notification `{}` correlation_id `{correlation_id}`",
+                    value.code
+                )),
+                err => err,
+            });
+        }
+
         if use_kafka {
             let topic = cfg.kafka.topics.send.clone();
-            let partition_key = correlation_id.to_string();
-
-            match self
-                .outbox
-                .insert_delivery_with_outbox(
-                    value.notification_id,
-                    correlation_id,
-                    &value.kind,
-                    &title,
-                    &rendered,
-                    &recipients,
-                    &value.payload,
-                    &metadata,
+            let kafka = self
+                .kafka
+                .as_ref()
+                .expect("kafka client present when kafka is enabled");
+            match kafka
+                .publish_json(
                     &topic,
-                    &partition_key,
-                    |_| serde_json::to_value(&message).unwrap_or(Value::Null),
+                    correlation_id,
+                    &value.source,
+                    &value.kind,
+                    EVENT_TYPE_SEND,
+                    &message,
                 )
                 .await
             {
-                Ok(_) => {}
-                Err(AppError::Conflict(_)) => {
-                    return Err(AppError::conflict(format!(
-                        "delivery already exists for notification `{}` correlation_id `{correlation_id}`",
-                        value.code
-                    )));
+                Ok((partition, offset)) => {
+                    tracing::info!(
+                        topic,
+                        partition,
+                        offset,
+                        correlation_id,
+                        code = %value.code,
+                        "Notification published"
+                    );
                 }
                 Err(err) => {
-                    tracing::error!(error = %err, code = %value.code, "insert outbox failed");
-                    return Err(err);
+                    tracing::error!(error = %err, code = %value.code, "Kafka publish failed");
+                    return Err(AppError::internal(err));
                 }
             }
         } else {
-            if let Err(err) = self
-                .deliveries
-                .insert(
-                    value.notification_id,
-                    correlation_id,
-                    &value.kind,
-                    &title,
-                    &rendered,
-                    &recipients,
-                    &value.payload,
-                    &metadata,
-                )
-                .await
-            {
-                tracing::error!(error = %err, code = %value.code, "insert delivery failed");
-                return Err(match err {
-                    AppError::Conflict(_) => AppError::conflict(format!(
-                        "delivery already exists for notification `{}` correlation_id `{correlation_id}`",
-                        value.code
-                    )),
-                    err => err,
-                });
-            }
             self.dispatch_direct_send(value).await?;
         }
 

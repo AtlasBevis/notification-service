@@ -2,9 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateData {
     pub id: i64,
     pub name: String,
@@ -142,11 +141,9 @@ fn truncate_chars(s: &str, max: usize) -> String {
 }
 
 /// Insert-only. Same `name` always gets `version = max(version)+1`.
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CreateTemplateRequest {
-    #[schema(example = "airflow")]
     pub name: String,
-    #[schema(example = "Airflow Task Failed")]
     pub title: String,
     pub content: String,
     #[serde(default = "default_format")]

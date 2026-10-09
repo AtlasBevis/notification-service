@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
-/// Catalog / outbox statuses stored as uppercase strings in Postgres.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+/// Catalog and delivery statuses stored as uppercase strings in Postgres.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
-#[schema(rename_all = "UPPERCASE")]
 pub enum NotificationStatus {
     Active,
     Inactive,

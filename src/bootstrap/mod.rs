@@ -4,12 +4,12 @@ use std::sync::Arc;
 use crate::config::Config;
 use crate::infras::Infrastructure;
 use crate::repository::{
-    ChannelsRepository, DeliveriesRepository, NotificationsRepository, OutboxRepository,
-    SourcesRepository, TargetsRepository, TemplatesRepository,
+    ChannelsRepository, DeliveriesRepository, NotificationsRepository, SourcesRepository,
+    TargetsRepository, TemplatesRepository,
 };
 use crate::services::{
-    ChannelsService, ChannelsServiceTrait, NotificationService, NotifyService, OutboxService,
-    SourcesService, SourcesServiceTrait, TargetsService, TargetsServiceTrait, TemplatesService,
+    ChannelsService, ChannelsServiceTrait, NotificationService, NotifyService, SourcesService,
+    SourcesServiceTrait, TargetsService, TargetsServiceTrait, TemplatesService,
 };
 use crate::state::{AppState, SharedState};
 
@@ -23,8 +23,7 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
     let targets_repo = TargetsRepository::new(pool.clone());
     let templates_repo = TemplatesRepository::new(pool.clone());
     let notifications_repo = NotificationsRepository::new(pool.clone());
-    let deliveries_repo = DeliveriesRepository::new(pool.clone());
-    let outbox_repo = OutboxRepository::new(pool);
+    let deliveries_repo = DeliveriesRepository::new(pool);
 
     let channels_service = Arc::new(ChannelsService::new(channels_repo.clone()));
     let sources_service = Arc::new(SourcesService::new(sources_repo.clone()));
@@ -56,19 +55,11 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
         infras.http_client.clone(),
         notification_service.clone(),
         deliveries_repo,
-        outbox_repo.clone(),
         sources_service.clone(),
         targets_service.clone(),
         channels_service.clone(),
         templates_service.clone(),
     ));
-
-    if let Some(kafka) = infras.kafka.clone() {
-        let publisher = Arc::new(OutboxService::new(outbox_repo, kafka));
-        tokio::spawn(async move {
-            publisher.run_publisher().await;
-        });
-    }
 
     Ok(Arc::new(AppState {
         notification_service,
@@ -121,8 +112,7 @@ pub async fn build_notification_consumer(config: &Config) -> Result<Arc<NotifySe
         Some(kafka),
         infras.http_client,
         notification_service,
-        DeliveriesRepository::new(pool.clone()),
-        OutboxRepository::new(pool),
+        DeliveriesRepository::new(pool),
         sources_service,
         targets_service,
         channels_service,

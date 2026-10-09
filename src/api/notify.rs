@@ -4,24 +4,6 @@ use crate::state::SharedState;
 use axum::extract::State;
 
 /// Trigger send for a notification
-#[utoipa::path(
-    post,
-    path = "/notification/notify",
-    tag = "Notify",
-    operation_id = "notification_notify",
-    request_body = NotifyRequest,
-    responses(
-        (status = 202, description = "Accepted"),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 404, description = "Not found"),
-        (status = 409, description = "Conflict"),
-        (status = 503, description = "Service unavailable")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn notify(
     State(state): State<SharedState>,
     ApiRequest(mut payload): ApiRequest<NotifyRequest>,

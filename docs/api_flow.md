@@ -23,7 +23,7 @@ sequenceDiagram
 
 ## Routing `src/api/routes.rs`
 
-- **Public:** `GET /health`, Swagger UI / OpenAPI JSON
+- **Public:** `GET /health`
 - **Protected (`api-key` + logging), nested under `/notification`:** `POST /notification/notify`
 
 ## Logging `src/middlewares/logging.rs`

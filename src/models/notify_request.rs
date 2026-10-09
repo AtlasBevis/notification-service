@@ -1,22 +1,17 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use utoipa::ToSchema;
 
 use crate::error::{AppError, AppResult};
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotifyRequest {
-    #[schema(example = "AIRFLOW")]
     pub service: String,
 
-    #[schema(example = "notification_uuid")]
     pub code: String,
 
-    #[schema(example = "trace_id")]
     pub trace_id: String,
 
     #[serde(default)]
-    #[schema(value_type = Object)]
     pub variables: Map<String, Value>,
 }
 

@@ -1,4 +1,3 @@
-use crate::api::openapi::ApiDoc;
 use crate::api::{health, notification, notify, sources, targets, templates};
 use crate::middlewares::{auth_middleware, http_metrics_middleware, logging_middleware};
 use crate::state::SharedState;
@@ -8,8 +7,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
 
 const TEMPLATES_API: &str = "/templates";
 const SOURCES_API: &str = "/sources";
@@ -53,8 +50,5 @@ pub fn app_routes(state: SharedState) -> Router {
         .route_layer(middleware::from_fn(logging_middleware))
         .route_layer(middleware::from_fn(http_metrics_middleware));
 
-    public
-        .merge(protected)
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .with_state(state)
+    public.merge(protected).with_state(state)
 }

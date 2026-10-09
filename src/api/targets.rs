@@ -3,24 +3,6 @@ use crate::services::TargetsServiceTrait;
 use crate::state::SharedState;
 use axum::extract::{Path, State};
 
-#[utoipa::path(
-    get,
-    path = "/notification/targets/{code}",
-    tag = "Targets",
-    operation_id = "get_target",
-    params(
-        ("code" = String, Path, description = "Target code", example = "TEAM_MIS")
-    ),
-    responses(
-        (status = 200, description = "OK", body = TargetData),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 404, description = "Not found")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn get_target(
     State(state): State<SharedState>,
     Path(code): Path<String>,
@@ -37,22 +19,6 @@ pub async fn get_target(
     }
 }
 
-#[utoipa::path(
-    post,
-    path = "/notification/targets",
-    tag = "Targets",
-    operation_id = "create_target",
-    request_body = CreateTargetRequest,
-    responses(
-        (status = 201, description = "Created"),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 409, description = "Conflict")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn create_target(
     State(state): State<SharedState>,
     ApiRequest(mut payload): ApiRequest<CreateTargetRequest>,
@@ -68,22 +34,6 @@ pub async fn create_target(
     }
 }
 
-#[utoipa::path(
-    patch,
-    path = "/notification/targets/metadata",
-    tag = "Targets",
-    operation_id = "patch_target_metadata",
-    request_body = PatchMetadataRequest,
-    responses(
-        (status = 200, description = "OK"),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 404, description = "Not found")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn patch_metadata(
     State(state): State<SharedState>,
     ApiRequest(mut payload): ApiRequest<PatchMetadataRequest>,

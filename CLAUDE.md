@@ -11,7 +11,6 @@ Hướng dẫn cho AI assistant khi làm việc trong repository này.
 1. Nhận thông báo từ các app nội bộ (`POST /notification/notify`)
 2. Publish lên Kafka (API) — process `notification-consumer` gửi TEAMS / EMAIL
 3. Bảo vệ endpoint bằng header `api-key` (logging middleware trên protected routes)
-4. Xuất OpenAPI (`/api-docs/openapi.json`) cho Swagger UI
 
 Default listen: `0.0.0.0:8080` (xem `config.yaml` / env).
 
@@ -37,7 +36,6 @@ Default listen: `0.0.0.0:8080` (xem `config.yaml` / env).
 | Postgres | `deadpool-postgres` + `tokio-postgres` |
 | HTTP client | `reqwest` + `reqwest-middleware` |
 | Auth | header `api-key` |
-| OpenAPI | `utoipa`, `utoipa-swagger-ui` |
 | Logging | `tracing` JSON |
 
 ---
@@ -50,11 +48,11 @@ src/
   bin/notification_consumer.rs  # Kafka worker (`notification-consumer`)
   app.rs               # run_api() / run_notification_consumer()
   bootstrap/           # composition root
-  api/                 # notify, sources, targets, templates, health, routes, OpenAPI
+  api/                 # notify, sources, targets, templates, health, routes
   middlewares/         # auth (api-key), logging, metrics
-  services/            # notification, sources, targets, channels, templates, outbox
+  services/            # notification, sources, targets, channels, templates
   models/              # send_request, channel, source, target, template, ...
-  repository/          # channels, sources, targets, templates, notifications, deliveries, outbox (Postgres)
+  repository/          # channels, sources, targets, templates, notifications, deliveries (Postgres)
   infras/
     postgres/          # PostgresManager
     kafka/             # KafkaBus
@@ -84,7 +82,6 @@ Templates: stored in Postgres `templates`, loaded into memory at startup (`Templ
 | `POST /notification/targets` | `api-key` |
 | `PATCH /notification/targets/metadata` | `api-key` |
 | `POST /notification/templates` | `api-key` |
-| `/swagger-ui`, `/api-docs/openapi.json` | Public |
 
 Middleware (protected): `logging` → `auth` (`api-key`).
 

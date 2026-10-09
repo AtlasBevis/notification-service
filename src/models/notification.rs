@@ -1,11 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use utoipa::ToSchema;
 
 use crate::enums::NotificationStatus;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationData {
     pub id: i64,
     pub code: String,
@@ -15,7 +14,6 @@ pub struct NotificationData {
     pub target: String,
     pub channel: String,
     pub template_id: i64,
-    #[schema(value_type = Object)]
     pub metadata: Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -39,28 +37,21 @@ impl NotificationData {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CreateNotificationRequest {
-    #[schema(example = "AIRFLOW_FAIL")]
     pub code: String,
 
-    #[schema(example = "Airflow fail to MIS Teams")]
     pub name: String,
 
-    #[schema(example = "AIRFLOW")]
     pub source: String,
 
-    #[schema(example = "TEAM_MIS")]
     pub target: String,
 
-    #[schema(example = "MSTEAMS")]
     pub channel: String,
 
-    #[schema(example = 1)]
     pub template_id: i64,
 
     #[serde(default)]
-    #[schema(value_type = Object)]
     pub metadata: Map<String, Value>,
 }
 
@@ -94,28 +85,21 @@ impl CreateNotificationRequest {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct UpdateNotificationRequest {
-    #[schema(example = "Airflow fail to MIS Teams")]
     pub name: String,
 
-    #[schema(example = "ACTIVE")]
     pub status: String,
 
-    #[schema(example = "AIRFLOW")]
     pub source: String,
 
-    #[schema(example = "TEAM_MIS")]
     pub target: String,
 
-    #[schema(example = "MSTEAMS")]
     pub channel: String,
 
-    #[schema(example = 1)]
     pub template_id: i64,
 
     #[serde(default)]
-    #[schema(value_type = Object)]
     pub metadata: Map<String, Value>,
 }
 

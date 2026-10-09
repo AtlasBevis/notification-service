@@ -1,16 +1,14 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceData {
     pub code: String,
     pub name: String,
     pub status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    #[schema(value_type = Object)]
     pub metadata: Value,
 }
 
@@ -27,16 +25,13 @@ impl SourceData {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CreateSourceRequest {
-    #[schema(example = "AIRFLOW")]
     pub code: String,
 
-    #[schema(example = "Airflow")]
     pub name: String,
 
     #[serde(default)]
-    #[schema(value_type = Object)]
     pub metadata: Map<String, Value>,
 }
 
@@ -64,13 +59,11 @@ impl CreateSourceRequest {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct PatchMetadataRequest {
-    #[schema(example = "AIRFLOW")]
     pub code: String,
 
     #[serde(default)]
-    #[schema(value_type = Object)]
     pub metadata: Map<String, Value>,
 }
 

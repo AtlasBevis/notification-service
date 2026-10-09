@@ -1,9 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeliveryData {
     pub id: i64,
     pub notification_id: i64,
@@ -11,11 +10,8 @@ pub struct DeliveryData {
     pub level: String,
     pub title: String,
     pub message: String,
-    #[schema(value_type = Object)]
     pub recipients: Value,
-    #[schema(value_type = Object)]
     pub payload: Value,
-    #[schema(value_type = Object)]
     pub metadata: Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -5,7 +5,7 @@ use crate::models::{NotificationData, NotifyRequest, Recipients};
 
 pub const EVENT_TYPE_SEND: &str = "notification.send";
 
-/// Kafka / outbox payload. `Serialize` + `Deserialize` for JSON.
+/// Kafka payload. `Serialize` + `Deserialize` for JSON.
 /// `Debug` for tracing. No `Clone`: pass `&NotifyMessage` or move it.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NotifyMessage {

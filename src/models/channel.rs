@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use utoipa::ToSchema;
 
 use crate::utils::json::get_string;
 
@@ -13,12 +12,11 @@ pub struct SmtpConfig {
     pub password: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelData {
     pub code: String,
     pub name: String,
     pub status: String,
-    #[schema(value_type = Object)]
     pub metadata: Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

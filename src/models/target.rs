@@ -1,16 +1,14 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use utoipa::ToSchema;
 
 use crate::utils::json::get_string;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetData {
     pub code: String,
     pub name: String,
     pub status: String,
-    #[schema(value_type = Object)]
     pub metadata: Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -40,7 +38,7 @@ impl TargetData {
 }
 
 /// Resolved email destinations (snapshot for deliveries / dispatch).
-#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Recipients {
     #[serde(default)]
     pub to: Vec<String>,
@@ -80,16 +78,13 @@ fn string_list(metadata: &Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CreateTargetRequest {
-    #[schema(example = "TEAM_MIS")]
     pub code: String,
 
-    #[schema(example = "MIS Teams webhook")]
     pub name: String,
 
     #[serde(default)]
-    #[schema(value_type = Object)]
     pub metadata: Map<String, Value>,
 }
 

@@ -14,6 +14,6 @@ Content-Type: application/json
 
 If `auth` is omitted or `auth.enabled: false`, the check is skipped.
 
-`GET /health`, Swagger UI, and `/api-docs/openapi.json` are public.
+`GET /health` is public.
 
 Implementation: [`src/middlewares/auth.rs`](../src/middlewares/auth.rs).

@@ -3,24 +3,6 @@ use crate::services::SourcesServiceTrait;
 use crate::state::SharedState;
 use axum::extract::{Path, State};
 
-#[utoipa::path(
-    get,
-    path = "/notification/sources/{code}",
-    tag = "Sources",
-    operation_id = "get_source",
-    params(
-        ("code" = String, Path, description = "Source code", example = "AIRFLOW")
-    ),
-    responses(
-        (status = 200, description = "OK", body = SourceData),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 404, description = "Not found")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn get_source(
     State(state): State<SharedState>,
     Path(code): Path<String>,
@@ -37,22 +19,6 @@ pub async fn get_source(
     }
 }
 
-#[utoipa::path(
-    post,
-    path = "/notification/sources",
-    tag = "Sources",
-    operation_id = "create_source",
-    request_body = CreateSourceRequest,
-    responses(
-        (status = 201, description = "Created"),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 409, description = "Conflict")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn create_source(
     State(state): State<SharedState>,
     ApiRequest(mut payload): ApiRequest<CreateSourceRequest>,
@@ -68,22 +34,6 @@ pub async fn create_source(
     }
 }
 
-#[utoipa::path(
-    patch,
-    path = "/notification/sources/metadata",
-    tag = "Sources",
-    operation_id = "patch_source_metadata",
-    request_body = PatchMetadataRequest,
-    responses(
-        (status = 200, description = "OK"),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 404, description = "Not found")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn patch_metadata(
     State(state): State<SharedState>,
     ApiRequest(mut payload): ApiRequest<PatchMetadataRequest>,

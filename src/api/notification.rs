@@ -6,19 +6,6 @@ use crate::services::NotificationServiceTrait;
 use crate::state::SharedState;
 use axum::extract::{Path, State};
 
-#[utoipa::path(
-    get,
-    path = "/notification",
-    tag = "Notification",
-    operation_id = "list_notifications",
-    responses(
-        (status = 200, description = "OK", body = PageData<NotificationData>),
-        (status = 401, description = "Unauthorized")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn list_notifications(
     State(state): State<SharedState>,
 ) -> ApiResponse<PageData<NotificationData>> {
@@ -28,22 +15,6 @@ pub async fn list_notifications(
     }
 }
 
-#[utoipa::path(
-    post,
-    path = "/notification",
-    tag = "Notification",
-    operation_id = "create_notification",
-    request_body = CreateNotificationRequest,
-    responses(
-        (status = 201, description = "Created", body = NotificationData),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 409, description = "Conflict")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn create_notification(
     State(state): State<SharedState>,
     ApiRequest(mut payload): ApiRequest<CreateNotificationRequest>,
@@ -59,24 +30,6 @@ pub async fn create_notification(
     }
 }
 
-#[utoipa::path(
-    get,
-    path = "/notification/{code}",
-    tag = "Notification",
-    operation_id = "get_notification",
-    params(
-        ("code" = String, Path, description = "Notification code", example = "AIRFLOW_FAIL")
-    ),
-    responses(
-        (status = 200, description = "OK", body = NotificationData),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 404, description = "Not found")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn get_notification(
     State(state): State<SharedState>,
     Path(code): Path<String>,
@@ -92,25 +45,6 @@ pub async fn get_notification(
     }
 }
 
-#[utoipa::path(
-    put,
-    path = "/notification/{code}",
-    tag = "Notification",
-    operation_id = "update_notification",
-    params(
-        ("code" = String, Path, description = "Notification code", example = "AIRFLOW_FAIL")
-    ),
-    request_body = UpdateNotificationRequest,
-    responses(
-        (status = 200, description = "OK", body = NotificationData),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 404, description = "Not found")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn update_notification(
     State(state): State<SharedState>,
     Path(code): Path<String>,
@@ -132,25 +66,6 @@ pub async fn update_notification(
     }
 }
 
-#[utoipa::path(
-    delete,
-    path = "/notification/{code}",
-    tag = "Notification",
-    operation_id = "delete_notification",
-    params(
-        ("code" = String, Path, description = "Notification code", example = "AIRFLOW_FAIL")
-    ),
-    responses(
-        (status = 200, description = "OK"),
-        (status = 400, description = "Invalid request"),
-        (status = 401, description = "Unauthorized"),
-        (status = 404, description = "Not found"),
-        (status = 409, description = "Conflict")
-    ),
-    security(
-        ("api-key" = [])
-    )
-)]
 pub async fn delete_notification(
     State(state): State<SharedState>,
     Path(code): Path<String>,
