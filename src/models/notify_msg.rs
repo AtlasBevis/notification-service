@@ -27,6 +27,8 @@ pub struct NotifyValue {
     pub variables: Map<String, Value>,
 
     pub notification_id: i64,
+    pub definition_id: i64,
+    pub delivery_id: i64,
     pub source: String,
     pub target: String,
     pub channel: String,
@@ -43,7 +45,7 @@ impl NotifyMessage {
     pub fn new(req: &NotifyRequest) -> Self {
         Self {
             key: NotifyKey {
-                service: req.service.clone(),
+                service: String::new(),
                 notification_code: req.code.clone(),
                 trace_id: req.trace_id.clone(),
             },
@@ -52,6 +54,8 @@ impl NotifyMessage {
                 code: req.code.clone(),
                 variables: req.variables.clone(),
                 notification_id: 0,
+                definition_id: 0,
+                delivery_id: 0,
                 source: String::new(),
                 target: String::new(),
                 channel: String::new(),
@@ -65,17 +69,20 @@ impl NotifyMessage {
         }
     }
 
-    pub fn with_notification(
+    pub fn with_definition(
         mut self,
-        notification: &NotificationData,
+        definition: &NotificationData,
         template: impl Into<String>,
         recipients: Recipients,
     ) -> Self {
-        self.value.notification_id = notification.id;
-        self.value.code = notification.code.clone();
-        self.value.source = notification.source.clone();
-        self.value.target = notification.target.clone();
-        self.value.channel = notification.channel.clone();
+        self.key.service = definition.source_code.clone();
+        self.key.notification_code = definition.code.clone();
+        self.value.definition_id = definition.id;
+        self.value.code = definition.code.clone();
+        self.value.source = definition.source_code.clone();
+        self.value.target = definition.target_code.clone();
+        self.value.channel = definition.channel_code.clone();
+        self.value.kind = definition.level.clone();
         self.value.template = template.into();
         self.value.recipients = recipients;
         self

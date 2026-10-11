@@ -41,12 +41,16 @@ impl ChannelsRepository {
         Ok(row.map(|r| ChannelData::map_row(&r)))
     }
 
-    pub async fn must_active(&self, code: &str) -> Result<ChannelData, String> {
-        match self.find_by_code(code).await {
-            Ok(Some(c)) if c.status.eq_ignore_ascii_case("ACTIVE") => Ok(c),
-            Ok(Some(_)) => Err(format!("channel `{code}` is not ACTIVE")),
-            Ok(None) => Err(format!("unknown channel `{code}`")),
-            Err(err) => Err(format!("failed to load channel `{code}`: {err}")),
-        }
+    pub async fn find_by_id(&self, code: &str) -> Result<Option<ChannelData>, AppError> {
+        let client = self.pool.get().await?;
+        let key = code.trim().to_ascii_uppercase();
+        let row = client
+            .query_opt(
+                "SELECT code, name, status, metadata, created_at, updated_at
+                 FROM channels WHERE code = $1",
+                &[&key],
+            )
+            .await?;
+        Ok(row.map(|r| ChannelData::map_row(&r)))
     }
 }

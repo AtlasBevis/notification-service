@@ -4,8 +4,8 @@
 -- WEBHOOK:  { "url": "https://internal-service/hooks/notify", "method": "POST" }
 
 CREATE TABLE targets (
-  code              VARCHAR(50)  PRIMARY KEY,
-  channel_code      VARCHAR(50)  NOT NULL REFERENCES channels (code),
+  id                INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  code              VARCHAR(50)  NOT NULL UNIQUE,
   created_at        timestamptz  NOT NULL DEFAULT now(),
   updated_at        timestamptz  NOT NULL,
 
@@ -16,25 +16,26 @@ CREATE TABLE targets (
   CONSTRAINT chk_targets_status CHECK (status IN ('ACTIVE', 'INACTIVE'))
 );
 
-INSERT INTO targets (code, channel_code, name, metadata, updated_at) VALUES
-  (
-    'TEAM_MIS',
-    'MSTEAMS',
-    'MIS Teams webhook',
-    '{"url": ""}'::jsonb,
-    now()
-  ),
-  (
-    'OPS_EMAIL',
-    'EMAIL',
-    'Ops email group',
-    '{"to": [], "cc": [], "bcc": []}'::jsonb,
-    now()
-  ),
-  (
-    'ORCHESTRATOR',
-    'WEBHOOK',
-    'Internal orchestrator',
-    '{"url": "", "method": "POST"}'::jsonb,
-    now()
-  );
+-- example insert
+-- INSERT INTO targets (code, channel_code, name, metadata, updated_at) VALUES
+--   (
+--     'TEAM_MIS',
+--     'MSTEAMS',
+--     'MIS Teams webhook',
+--     '{"url": ""}'::jsonb,
+--     now()
+--   ),
+--   (
+--     'OPS_EMAIL',
+--     'EMAIL',
+--     'Ops email group',
+--     '{"to": [], "cc": [], "bcc": []}'::jsonb,
+--     now()
+--   ),
+--   (
+--     'ORCHESTRATOR',
+--     'WEBHOOK',
+--     'Internal orchestrator',
+--     '{"url": "", "method": "POST"}'::jsonb,
+--     now()
+--   );

@@ -4,6 +4,7 @@ use serde_json::{Map, Value};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceData {
+    pub id: i32,
     pub code: String,
     pub name: String,
     pub status: String,
@@ -15,6 +16,7 @@ pub struct SourceData {
 impl SourceData {
     pub fn map_row(row: &tokio_postgres::Row) -> Self {
         Self {
+            id: row.get("id"),
             code: row.get("code"),
             name: row.get("name"),
             status: row.get("status"),

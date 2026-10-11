@@ -1,7 +1,7 @@
 use crate::infras::kafka::KafkaBus;
 use crate::infras::postgres::PostgresManager;
 use crate::services::{
-    ChannelsService, NotificationService, NotifyService, SourcesService, TargetsService,
+    ChannelsService, NotificationService, NotifyService, SourceService, TargetsService,
     TemplatesService,
 };
 use std::sync::Arc;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 pub struct AppState {
     pub notification_service: Arc<NotificationService>,
     pub notify_service: Arc<NotifyService>,
-    pub sources_service: Arc<SourcesService>,
+    pub sources_service: Arc<SourceService>,
     pub targets_service: Arc<TargetsService>,
     pub channels_service: Arc<ChannelsService>,
     pub templates_service: Arc<TemplatesService>,

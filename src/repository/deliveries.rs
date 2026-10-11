@@ -1,8 +1,5 @@
 use chrono::Utc;
 use deadpool_postgres::Pool;
-use serde_json::Value;
-
-use crate::models::DeliveryData;
 
 use crate::error::AppError;
 
@@ -16,41 +13,51 @@ impl DeliveriesRepository {
         Self { pool }
     }
 
-    pub async fn insert(
+    /// Record the outcome of one channel call and append `delivery_attempts`.
+    pub async fn record_result(
         &self,
-        notification_id: i64,
-        correlation_id: &str,
-        level: &str,
-        title: &str,
-        message: &str,
-        recipients: &Value,
-        payload: &Value,
-        metadata: &Value,
-    ) -> Result<DeliveryData, AppError> {
-        let client = self.pool.get().await?;
+        delivery_id: i64,
+        status: &str,
+        error_message: Option<&str>,
+    ) -> Result<(), AppError> {
+        if delivery_id <= 0 {
+            return Ok(());
+        }
+        let mut client = self.pool.get().await?;
+        let tx = client.transaction().await?;
         let now = Utc::now();
+        let sent_at = if status == "SENT" { Some(now) } else { None };
 
-        let row = client
+        let row = tx
             .query_one(
-                "INSERT INTO deliveries (
-                    notification_id, correlation_id, level, title, message,
-                    recipients, payload, metadata, updated_at
-                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-                 RETURNING id, notification_id, correlation_id, level, title, message,
-                           recipients, payload, metadata, created_at, updated_at",
-                &[
-                    &notification_id,
-                    &correlation_id,
-                    &level,
-                    &title,
-                    &message,
-                    recipients,
-                    payload,
-                    metadata,
-                    &now,
-                ],
+                "UPDATE deliveries
+                 SET status = $2,
+                     attempt_count = attempt_count + 1,
+                     last_error_message = $3,
+                     sent_at = COALESCE($4, sent_at),
+                     updated_at = $5
+                 WHERE id = $1
+                 RETURNING attempt_count",
+                &[&delivery_id, &status, &error_message, &sent_at, &now],
             )
             .await?;
-        Ok(DeliveryData::map_row(&row))
+        let attempt_no: i32 = row.get("attempt_count");
+        let attempt_status = if status == "SENT" { "SUCCESS" } else { "FAILED" };
+
+        tx.execute(
+            "INSERT INTO delivery_attempts (
+                delivery_id, attempt_no, status, finished_at, error_message
+             ) VALUES ($1,$2,$3,$4,$5)",
+            &[
+                &delivery_id,
+                &attempt_no,
+                &attempt_status,
+                &now,
+                &error_message,
+            ],
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(())
     }
 }

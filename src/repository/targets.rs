@@ -4,7 +4,7 @@ use deadpool_postgres::Pool;
 use serde_json::Value;
 
 use crate::{
-    enums::NotificationStatus,
+    enums::StatusEnum,
     models::{CreateTargetRequest, TargetData},
 };
 
@@ -24,7 +24,7 @@ impl TargetsRepository {
         let client = self.pool.get().await.context("postgres pool")?;
         let rows = client
             .query(
-                "SELECT code, name, status, metadata, created_at, updated_at
+                "SELECT code, channel_code, name, status, metadata, created_at, updated_at
                   FROM targets",
                 &[],
             )
@@ -37,7 +37,7 @@ impl TargetsRepository {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT code, name, status, metadata, created_at, updated_at
+                "SELECT code, channel_code, name, status, metadata, created_at, updated_at
                     FROM targets
                     WHERE code = $1",
                 &[&code],
@@ -51,13 +51,14 @@ impl TargetsRepository {
 
         let row = client
             .query_one(
-                "INSERT INTO targets (code, name, status, metadata, updated_at)
-                 VALUES ($1, $2, $3, $4, $5)
-                 RETURNING code, name, status, metadata, created_at, updated_at",
+                "INSERT INTO targets (code, channel_code, name, status, metadata, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 RETURNING code, channel_code, name, status, metadata, created_at, updated_at",
                 &[
                     &req.code,
+                    &req.channel_code,
                     &req.name,
-                    &NotificationStatus::Active.as_str(),
+                    &StatusEnum::Active.as_str(),
                     &Value::Object(req.metadata.clone()),
                     &Utc::now(),
                 ],

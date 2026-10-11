@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::enums::NotificationStatus;
+use crate::enums::StatusEnum;
 use crate::error::{AppError, AppResult};
 use crate::models::{CreateTargetRequest, PatchMetadataRequest, TargetData};
 use crate::repository::TargetsRepository;
@@ -13,7 +13,7 @@ pub trait TargetsServiceTrait: Send + Sync {
     async fn load(&self) -> anyhow::Result<()>;
     async fn get(&self, code: &str) -> Option<TargetData>;
     async fn get_by_code(&self, code: &str) -> AppResult<Option<TargetData>>;
-    async fn must_active(&self, code: &str) -> Result<TargetData, String>;
+    async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData>;
     async fn create(&self, req: CreateTargetRequest) -> AppResult<()>;
     async fn patch_metadata(&self, req: PatchMetadataRequest) -> AppResult<()>;
 }
@@ -70,7 +70,7 @@ impl TargetsServiceTrait for TargetsService {
         }
     }
 
-    async fn must_active(&self, code: &str) -> Result<TargetData, String> {
+    async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData> {
         let key = code.trim().to_ascii_uppercase();
         if let Some(t) = self.get(&key).await {
             return active_target(t, code);
@@ -125,9 +125,7 @@ impl TargetsServiceTrait for TargetsService {
 }
 
 fn active_target(t: TargetData, code: &str) -> Result<TargetData, String> {
-    if t.status
-        .eq_ignore_ascii_case(NotificationStatus::Active.as_str())
-    {
+    if t.status.eq_ignore_ascii_case(StatusEnum::Active.as_str()) {
         Ok(t)
     } else {
         Err(format!("target `{code}` is not ACTIVE"))

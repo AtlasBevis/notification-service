@@ -1,3 +1,5 @@
-pub mod status;
+mod channel;
+mod status;
 
-pub use status::NotificationStatus;
+pub use channel::ChannelEnum;
+pub use status::StatusEnum;

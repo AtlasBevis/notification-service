@@ -3,29 +3,29 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::enums::NotificationStatus;
+use crate::enums::StatusEnum;
 use crate::error::{AppError, AppResult};
 use crate::models::{CreateSourceRequest, PatchMetadataRequest, SourceData};
-use crate::repository::SourcesRepository;
+use crate::repository::SourceRepository;
 
 #[async_trait]
 pub trait SourcesServiceTrait: Send + Sync {
     async fn load(&self) -> anyhow::Result<()>;
     async fn get(&self, code: &str) -> Option<SourceData>;
     async fn get_by_code(&self, code: &str) -> AppResult<Option<SourceData>>;
-    async fn must_active(&self, code: &str) -> Result<SourceData, String>;
+    async fn get_active_by_id(&self, id: i32) -> AppResult<SourceData>;
     async fn create(&self, req: CreateSourceRequest) -> AppResult<()>;
     async fn patch_metadata(&self, req: PatchMetadataRequest) -> AppResult<()>;
 }
 
 #[derive(Clone)]
-pub struct SourcesService {
-    repo: SourcesRepository,
+pub struct SourceService {
+    repo: SourceRepository,
     cache: Arc<RwLock<HashMap<String, SourceData>>>,
 }
 
-impl SourcesService {
-    pub fn new(repo: SourcesRepository) -> Self {
+impl SourceService {
+    pub fn new(repo: SourceRepository) -> Self {
         Self {
             repo,
             cache: Arc::new(RwLock::new(HashMap::new())),
@@ -34,7 +34,7 @@ impl SourcesService {
 }
 
 #[async_trait]
-impl SourcesServiceTrait for SourcesService {
+impl SourcesServiceTrait for SourceService {
     async fn load(&self) -> anyhow::Result<()> {
         let rows = self.repo.list().await?;
 
@@ -70,13 +70,8 @@ impl SourcesServiceTrait for SourcesService {
         }
     }
 
-    async fn must_active(&self, code: &str) -> Result<SourceData, String> {
-        let key = code.trim().to_ascii_uppercase();
-        if let Some(s) = self.get(&key).await {
-            return active_source(s, code);
-        }
-
-        match self.repo.find_by_code(&key).await {
+    async fn get_active_by_id(&self, id: i32) -> AppResult<SourceData> {
+        match self.repo.find_by_id(&key).await {
             Ok(Some(s)) => {
                 self.cache.write().await.insert(key, s.clone());
                 active_source(s, code)
@@ -126,7 +121,7 @@ impl SourcesServiceTrait for SourcesService {
 
 fn active_source(s: SourceData, code: &str) -> Result<SourceData, String> {
     if s.status
-        .eq_ignore_ascii_case(NotificationStatus::Active.as_str())
+        .eq_ignore_ascii_case(StatusEnum::Active.as_str())
     {
         Ok(s)
     } else {

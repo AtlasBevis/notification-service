@@ -4,11 +4,11 @@ use std::sync::Arc;
 use crate::config::Config;
 use crate::infras::Infrastructure;
 use crate::repository::{
-    ChannelsRepository, DeliveriesRepository, NotificationsRepository, SourcesRepository,
+    ChannelsRepository, DeliveriesRepository, NotificationsRepository, SourceRepository,
     TargetsRepository, TemplatesRepository,
 };
 use crate::services::{
-    ChannelsService, ChannelsServiceTrait, NotificationService, NotifyService, SourcesService,
+    ChannelsService, ChannelsServiceTrait, NotificationService, NotifyService, SourceService,
     SourcesServiceTrait, TargetsService, TargetsServiceTrait, TemplatesService,
 };
 use crate::state::{AppState, SharedState};
@@ -19,14 +19,14 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
     let pool = infras.postgres.pool();
 
     let channels_repo = ChannelsRepository::new(pool.clone());
-    let sources_repo = SourcesRepository::new(pool.clone());
+    let sources_repo = SourceRepository::new(pool.clone());
     let targets_repo = TargetsRepository::new(pool.clone());
     let templates_repo = TemplatesRepository::new(pool.clone());
     let notifications_repo = NotificationsRepository::new(pool.clone());
     let deliveries_repo = DeliveriesRepository::new(pool);
 
     let channels_service = Arc::new(ChannelsService::new(channels_repo.clone()));
-    let sources_service = Arc::new(SourcesService::new(sources_repo.clone()));
+    let sources_service = Arc::new(SourceService::new(sources_repo.clone()));
     let targets_service = Arc::new(TargetsService::new(targets_repo.clone()));
     let templates_service = Arc::new(TemplatesService::new(templates_repo));
 
@@ -82,7 +82,7 @@ pub async fn build_notification_consumer(config: &Config) -> Result<Arc<NotifySe
         .context("Kafka is required for notification-consumer")?;
     let pool = infras.postgres.pool();
 
-    let sources_service = Arc::new(SourcesService::new(SourcesRepository::new(pool.clone())));
+    let sources_service = Arc::new(SourceService::new(SourceRepository::new(pool.clone())));
     let targets_service = Arc::new(TargetsService::new(TargetsRepository::new(pool.clone())));
     let channels_service = Arc::new(ChannelsService::new(ChannelsRepository::new(pool.clone())));
     let templates_service = Arc::new(TemplatesService::new(TemplatesRepository::new(

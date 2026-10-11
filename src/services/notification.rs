@@ -1,11 +1,15 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{CreateNotificationRequest, NotificationData, UpdateNotificationRequest};
+use crate::models::{
+    AcceptedNotification, CreateNotificationRequest, DeliveryDraft, NotificationData,
+    UpdateNotificationRequest,
+};
 use crate::repository::NotificationsRepository;
 use crate::services::{
-    ChannelsService, ChannelsServiceTrait, SourcesService, SourcesServiceTrait, TargetsService,
+    ChannelsService, ChannelsServiceTrait, SourceService, SourcesServiceTrait, TargetsService,
     TargetsServiceTrait, TemplatesService, TemplatesServiceTrait,
 };
 use async_trait::async_trait;
+use serde_json::Value;
 use std::sync::Arc;
 
 #[async_trait]
@@ -24,7 +28,7 @@ pub trait NotificationServiceTrait: Send + Sync {
 #[derive(Clone)]
 pub struct NotificationService {
     notifications: NotificationsRepository,
-    sources: Arc<SourcesService>,
+    sources: Arc<SourceService>,
     targets: Arc<TargetsService>,
     channels: Arc<ChannelsService>,
     templates: Arc<TemplatesService>,
@@ -33,7 +37,7 @@ pub struct NotificationService {
 impl NotificationService {
     pub fn new(
         notifications: NotificationsRepository,
-        sources: Arc<SourcesService>,
+        sources: Arc<SourceService>,
         targets: Arc<TargetsService>,
         channels: Arc<ChannelsService>,
         templates: Arc<TemplatesService>,
@@ -46,27 +50,72 @@ impl NotificationService {
             templates,
         }
     }
+
+    pub async fn accept(
+        &self,
+        definition_id: i64,
+        source_code: &str,
+        code: &str,
+        idempotency_key: &str,
+        variables: &Value,
+        drafts: &[DeliveryDraft],
+    ) -> AppResult<AcceptedNotification> {
+        self.notifications
+            .accept(
+                definition_id,
+                source_code,
+                code,
+                idempotency_key,
+                variables,
+                drafts,
+            )
+            .await
+    }
+
+    async fn ensure_destination(
+        &self,
+        source_code: &str,
+        channel_code: &str,
+        target_code: &str,
+        template_id: i64,
+    ) -> AppResult<()> {
+        self.sources
+            .get_active_by_id(source_code)
+            .await
+            .map_err(AppError::bad_request)?;
+        self.channels
+            .must_active(channel_code)
+            .await
+            .map_err(AppError::bad_request)?;
+        let target = self
+            .targets
+            .must_active(target_code)
+            .await
+            .map_err(AppError::bad_request)?;
+        if !target.channel_code.eq_ignore_ascii_case(channel_code) {
+            return Err(AppError::bad_request(format!(
+                "target `{target_code}` belongs to channel `{}`",
+                target.channel_code
+            )));
+        }
+        self.templates
+            .must_active_by_id(template_id)
+            .await
+            .map_err(AppError::bad_request)?;
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl NotificationServiceTrait for NotificationService {
     async fn create(&self, req: CreateNotificationRequest) -> AppResult<NotificationData> {
-        self.sources
-            .must_active(&req.source)
-            .await
-            .map_err(AppError::bad_request)?;
-        self.targets
-            .must_active(&req.target)
-            .await
-            .map_err(AppError::bad_request)?;
-        self.channels
-            .must_active(&req.channel)
-            .await
-            .map_err(AppError::bad_request)?;
-        self.templates
-            .must_active_by_id(req.template_id)
-            .await
-            .map_err(AppError::bad_request)?;
+        self.ensure_destination(
+            &req.source_code,
+            &req.channel_code,
+            &req.target_code,
+            req.template_id,
+        )
+        .await?;
 
         match self.notifications.insert(&req).await {
             Ok(row) => Ok(row),
@@ -103,22 +152,13 @@ impl NotificationServiceTrait for NotificationService {
         code: &str,
         req: UpdateNotificationRequest,
     ) -> AppResult<NotificationData> {
-        self.sources
-            .must_active(&req.source)
-            .await
-            .map_err(AppError::bad_request)?;
-        self.targets
-            .must_active(&req.target)
-            .await
-            .map_err(AppError::bad_request)?;
-        self.channels
-            .must_active(&req.channel)
-            .await
-            .map_err(AppError::bad_request)?;
-        self.templates
-            .must_active_by_id(req.template_id)
-            .await
-            .map_err(AppError::bad_request)?;
+        self.ensure_destination(
+            &req.source_code,
+            &req.channel_code,
+            &req.target_code,
+            req.template_id,
+        )
+        .await?;
 
         match self.notifications.update(code, &req).await {
             Ok(row) => Ok(row),

@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::enums::NotificationStatus;
+use crate::enums::StatusEnum;
+use crate::error::AppResult;
 use crate::models::ChannelData;
 use crate::repository::ChannelsRepository;
 
@@ -11,7 +12,7 @@ use crate::repository::ChannelsRepository;
 pub trait ChannelsServiceTrait: Send + Sync {
     async fn load(&self) -> anyhow::Result<()>;
     async fn get(&self, code: &str) -> Option<ChannelData>;
-    async fn must_active(&self, code: &str) -> Result<ChannelData, String>;
+    async fn get_active_by_id(&self, id: i32) -> AppResult<<ChannelData>;
 }
 
 #[derive(Clone)]
@@ -47,7 +48,7 @@ impl ChannelsServiceTrait for ChannelsService {
         self.cache.read().await.get(code).cloned()
     }
 
-    async fn must_active(&self, code: &str) -> Result<ChannelData, String> {
+    async fn get_active_by_id(&self, id: i32) -> AppResult<ChannelData> {
         let key = code.trim().to_ascii_uppercase();
         if let Some(c) = self.get(&key).await {
             return active_channel(c, code);
@@ -69,7 +70,7 @@ impl ChannelsServiceTrait for ChannelsService {
 
 fn active_channel(c: ChannelData, code: &str) -> Result<ChannelData, String> {
     if c.status
-        .eq_ignore_ascii_case(NotificationStatus::Active.as_str())
+        .eq_ignore_ascii_case(StatusEnum::Active.as_str())
     {
         Ok(c)
     } else {

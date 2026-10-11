@@ -7,6 +7,7 @@ use crate::utils::json::get_string;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetData {
     pub code: String,
+    pub channel_code: String,
     pub name: String,
     pub status: String,
     pub metadata: Value,
@@ -18,6 +19,7 @@ impl TargetData {
     pub fn map_row(row: &tokio_postgres::Row) -> Self {
         Self {
             code: row.get("code"),
+            channel_code: row.get("channel_code"),
             name: row.get("name"),
             status: row.get("status"),
             metadata: row.get("metadata"),
@@ -81,7 +83,7 @@ fn string_list(metadata: &Value, key: &str) -> Vec<String> {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateTargetRequest {
     pub code: String,
-
+    pub channel_code: String,
     pub name: String,
 
     #[serde(default)]
@@ -91,6 +93,7 @@ pub struct CreateTargetRequest {
 impl CreateTargetRequest {
     pub fn normalize(&mut self) {
         self.code = self.code.trim().to_ascii_uppercase();
+        self.channel_code = self.channel_code.trim().to_ascii_uppercase();
         self.name = self.name.trim().to_string();
     }
 
@@ -104,6 +107,9 @@ impl CreateTargetRequest {
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         {
             return Err("code must be alphanumeric, '_' or '-'".to_string());
+        }
+        if self.channel_code.is_empty() {
+            return Err("channel_code is required".to_string());
         }
         if self.name.is_empty() {
             return Err("name is required".to_string());

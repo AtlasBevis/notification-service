@@ -1,18 +1,20 @@
-use anyhow::Result;
 use chrono::Utc;
 use deadpool_postgres::Pool;
 use serde_json::Value;
 use tokio_postgres::error::SqlState;
+use uuid::Uuid;
 
 use crate::{
-    enums::NotificationStatus,
-    models::{CreateNotificationRequest, NotificationData, UpdateNotificationRequest},
+    enums::StatusEnum,
+    models::{
+        AcceptedNotification, CreateNotificationRequest, DeliveryDraft, NotificationData,
+        UpdateNotificationRequest,
+    },
 };
 
 use crate::error::AppError;
 
-const COLUMNS: &str =
-    "id, code, name, status, source, target, channel, template_id, metadata, created_at, updated_at";
+const COLUMNS: &str = "id, code, name, status, description, source_code, channel_code, target_code, template_id, level, created_at, updated_at";
 
 #[derive(Clone)]
 pub struct NotificationsRepository {
@@ -26,14 +28,14 @@ impl NotificationsRepository {
 
     pub async fn list(&self) -> Result<Vec<NotificationData>, AppError> {
         let client = self.pool.get().await?;
-        let sql = format!("SELECT {COLUMNS} FROM notifications ORDER BY code");
+        let sql = format!("SELECT {COLUMNS} FROM definitions ORDER BY code");
         let rows = client.query(sql.as_str(), &[]).await?;
         Ok(rows.iter().map(NotificationData::map_row).collect())
     }
 
     pub async fn find_by_code(&self, code: &str) -> Result<NotificationData, AppError> {
         let client = self.pool.get().await?;
-        let sql = format!("SELECT {COLUMNS} FROM notifications WHERE code = $1");
+        let sql = format!("SELECT {COLUMNS} FROM definitions WHERE code = $1");
         match client.query_opt(sql.as_str(), &[&code]).await? {
             Some(row) => Ok(NotificationData::map_row(&row)),
             None => Err(AppError::not_found(format!("code {code} not found"))),
@@ -48,10 +50,10 @@ impl NotificationsRepository {
         let now = Utc::now();
 
         let sql = format!(
-            "INSERT INTO notifications (
-                code, name, status, source, target, channel,
-                template_id, metadata, updated_at
-             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+            "INSERT INTO definitions (
+                code, name, status, description, source_code,
+                channel_code, target_code, template_id, level, updated_at
+             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
              RETURNING {COLUMNS}"
         );
         let row = client
@@ -60,12 +62,13 @@ impl NotificationsRepository {
                 &[
                     &req.code,
                     &req.name,
-                    &NotificationStatus::Active.as_str(),
-                    &req.source,
-                    &req.target,
-                    &req.channel,
+                    &StatusEnum::Active.as_str(),
+                    &req.description,
+                    &req.source_code,
+                    &req.channel_code,
+                    &req.target_code,
                     &req.template_id,
-                    &Value::Object(req.metadata.clone()),
+                    &req.level,
                     &now,
                 ],
             )
@@ -82,15 +85,16 @@ impl NotificationsRepository {
         let now = Utc::now();
 
         let sql = format!(
-            "UPDATE notifications
+            "UPDATE definitions
              SET name = $2,
                  status = $3,
-                 source = $4,
-                 target = $5,
-                 channel = $6,
-                 template_id = $7,
-                 metadata = $8,
-                 updated_at = $9
+                 description = $4,
+                 source_code = $5,
+                 channel_code = $6,
+                 target_code = $7,
+                 template_id = $8,
+                 level = $9,
+                 updated_at = $10
              WHERE code = $1
              RETURNING {COLUMNS}"
         );
@@ -101,11 +105,12 @@ impl NotificationsRepository {
                     &code,
                     &req.name,
                     &req.status,
-                    &req.source,
-                    &req.target,
-                    &req.channel,
+                    &req.description,
+                    &req.source_code,
+                    &req.channel_code,
+                    &req.target_code,
                     &req.template_id,
-                    &Value::Object(req.metadata.clone()),
+                    &req.level,
                     &now,
                 ],
             )
@@ -118,7 +123,10 @@ impl NotificationsRepository {
     pub async fn delete(&self, code: &str) -> Result<(), AppError> {
         let client = self.pool.get().await?;
         let n = match client
-            .execute("DELETE FROM notifications WHERE code = $1", &[&code])
+            .execute(
+                "DELETE FROM definitions WHERE code = $1",
+                &[&code],
+            )
             .await
         {
             Ok(n) => n,
@@ -126,7 +134,7 @@ impl NotificationsRepository {
                 if let Some(db) = err.as_db_error() {
                     if db.code() == &SqlState::FOREIGN_KEY_VIOLATION {
                         return Err(AppError::conflict(
-                            "notification is referenced by deliveries",
+                            "definition is referenced by notifications",
                         ));
                     }
                 }
@@ -137,5 +145,67 @@ impl NotificationsRepository {
             return Err(AppError::not_found("not found"));
         }
         Ok(())
+    }
+
+    /// Insert the runtime request and one delivery per route in one transaction.
+    pub async fn accept(
+        &self,
+        definition_id: i64,
+        source_code: &str,
+        code: &str,
+        idempotency_key: &str,
+        variables: &Value,
+        drafts: &[DeliveryDraft],
+    ) -> Result<AcceptedNotification, AppError> {
+        let mut client = self.pool.get().await?;
+        let tx = client.transaction().await?;
+        let now = Utc::now();
+
+        let row = tx
+            .query_one(
+                "INSERT INTO notifications (
+                    definition_id, source_code, code, idempotency_key, variables
+                 ) VALUES ($1,$2,$3,$4,$5)
+                 RETURNING id, public_id",
+                &[
+                    &definition_id,
+                    &source_code,
+                    &code,
+                    &idempotency_key,
+                    variables,
+                ],
+            )
+            .await?;
+        let notification_id: i64 = row.get("id");
+        let public_id: Uuid = row.get("public_id");
+
+        let draft = drafts.first().ok_or_else(|| AppError::bad_request("no destination"))?;
+        let delivery = tx
+            .query_one(
+                "INSERT INTO deliveries (
+                    notification_id, target_code, channel_code,
+                    title, body, payload, destination, updated_at
+                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+                 RETURNING id",
+                &[
+                    &notification_id,
+                    &draft.target_code,
+                    &draft.channel_code,
+                    &draft.title,
+                    &draft.body,
+                    &draft.payload,
+                    &draft.destination,
+                    &now,
+                ],
+            )
+            .await?;
+        let delivery_id: i64 = delivery.get("id");
+
+        tx.commit().await?;
+        Ok(AcceptedNotification {
+            id: notification_id,
+            public_id,
+            delivery_id,
+        })
     }
 }

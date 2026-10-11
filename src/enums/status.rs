@@ -1,50 +1,55 @@
 use serde::{Deserialize, Serialize};
 
-/// Catalog and delivery statuses stored as uppercase strings in Postgres.
+pub const ACTIVE: &str = "ACTIVE";
+pub const INACTIVE: &str = "INACTIVE";
+pub const QUEUED: &str = "QUEUED";
+pub const PROCESSING: &str = "PROCESSING";
+pub const SENT: &str = "SENT";
+pub const FAILED: &str = "FAILED";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum NotificationStatus {
-    Active,
-    Inactive,
-    Queued,
-    Processing,
-    Sent,
-    Failed,
+pub enum StatusEnum {
+    ACTIVE,
+    INACTIVE,
+    QUEUED,
+    PROCESSING,
+    SENT,
+    FAILED,
 }
 
-impl NotificationStatus {
+impl StatusEnum {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Active => "ACTIVE",
-            Self::Inactive => "INACTIVE",
-            Self::Queued => "QUEUED",
-            Self::Processing => "PROCESSING",
-            Self::Sent => "SENT",
-            Self::Failed => "FAILED",
+            Self::ACTIVE => ACTIVE,
+            Self::INACTIVE => INACTIVE,
+            Self::QUEUED => QUEUED,
+            Self::PROCESSING => PROCESSING,
+            Self::SENT => SENT,
+            Self::FAILED => FAILED,
         }
     }
 
     pub fn parse(s: &str) -> Option<Self> {
-        match s.trim().to_ascii_uppercase().as_str() {
-            "ACTIVE" => Some(Self::Active),
-            "INACTIVE" => Some(Self::Inactive),
-            "QUEUED" => Some(Self::Queued),
-            "PROCESSING" => Some(Self::Processing),
-            "SENT" => Some(Self::Sent),
-            "FAILED" => Some(Self::Failed),
+        match s {
+            ACTIVE => Some(Self::ACTIVE),
+            INACTIVE => Some(Self::INACTIVE),
+            QUEUED => Some(Self::QUEUED),
+            PROCESSING => Some(Self::PROCESSING),
+            SENT => Some(Self::SENT),
+            FAILED => Some(Self::FAILED),
             _ => None,
         }
     }
 }
 
-impl std::fmt::Display for NotificationStatus {
+impl std::fmt::Display for StatusEnum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl From<NotificationStatus> for String {
-    fn from(value: NotificationStatus) -> Self {
+impl From<StatusEnum> for String {
+    fn from(value: StatusEnum) -> Self {
         value.as_str().to_string()
     }
 }

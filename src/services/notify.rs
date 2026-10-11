@@ -1,16 +1,17 @@
 use crate::config;
-use crate::enums::NotificationStatus;
+use crate::enums::StatusEnum;
 use crate::error::{AppError, AppResult};
 use crate::infras::http::HttpClient;
 use crate::infras::kafka::KafkaBus;
 use crate::models::{
-    NotificationData, NotifyMessage, NotifyRequest, NotifyValue, EVENT_TYPE_SEND,
+    DeliveryDraft, NotificationData, NotifyMessage, NotifyRequest, NotifyValue, EVENT_TYPE_SEND,
 };
-use crate::repository::DeliveriesRepository;
+use crate::repository::{DefinitionRepository, DeliveriesRepository};
+use crate::services::definitions::{DefinitionService, DefinitionServiceTrait};
 use crate::services::notification::NotificationService;
 use crate::services::templates::wrap_teams_message;
 use crate::services::{
-    ChannelsService, ChannelsServiceTrait, NotificationServiceTrait, SourcesService,
+    ChannelsService, ChannelsServiceTrait, NotificationServiceTrait, SourceService,
     SourcesServiceTrait, TargetsService, TargetsServiceTrait, TemplatesService,
     TemplatesServiceTrait,
 };
@@ -36,11 +37,12 @@ pub trait NotifyServiceTrait: Send + Sync {
 pub struct NotifyService {
     kafka: Option<Arc<KafkaBus>>,
     http: Arc<HttpClient>,
+    definitions: Arc<DefinitionService>,
+    sources: Arc<SourceService>,
+    channels: Arc<ChannelsService>,
+    targets: Arc<TargetsService>,
     notifications: Arc<NotificationService>,
     deliveries: DeliveriesRepository,
-    sources: Arc<SourcesService>,
-    targets: Arc<TargetsService>,
-    channels: Arc<ChannelsService>,
     templates: Arc<TemplatesService>,
 }
 
@@ -48,9 +50,10 @@ impl NotifyService {
     pub fn new(
         kafka: Option<Arc<KafkaBus>>,
         http: Arc<HttpClient>,
+        definitions: Arc<DefinitionService>,
         notifications: Arc<NotificationService>,
         deliveries: DeliveriesRepository,
-        sources: Arc<SourcesService>,
+        sources: Arc<SourceService>,
         targets: Arc<TargetsService>,
         channels: Arc<ChannelsService>,
         templates: Arc<TemplatesService>,
@@ -58,6 +61,7 @@ impl NotifyService {
         Self {
             kafka,
             http,
+            definitions,
             notifications,
             deliveries,
             sources,
@@ -117,11 +121,33 @@ impl NotifyService {
                 return;
             }
         };
-        self.retry_dispatch(topic, || self.dispatch_send(&msg.value))
-            .await;
+        let delivery_id = msg.value.delivery_id;
+        match self
+            .retry_dispatch(topic, || self.dispatch_send(&msg.value))
+            .await
+        {
+            Ok(()) => {
+                if let Err(err) = self
+                    .deliveries
+                    .record_result(delivery_id, "SENT", None)
+                    .await
+                {
+                    tracing::error!(error = %err, delivery_id, "record SENT failed");
+                }
+            }
+            Err(err) => {
+                if let Err(db) = self
+                    .deliveries
+                    .record_result(delivery_id, "FAILED", Some(&err))
+                    .await
+                {
+                    tracing::error!(error = %db, delivery_id, "record FAILED failed");
+                }
+            }
+        }
     }
 
-    async fn retry_dispatch<F, Fut>(&self, topic: &str, dispatch: F)
+    async fn retry_dispatch<F, Fut>(&self, topic: &str, dispatch: F) -> Result<(), String>
     where
         F: Fn() -> Fut,
         Fut: std::future::Future<Output = Result<()>>,
@@ -135,7 +161,7 @@ impl NotifyService {
                         "status" => "ok"
                     )
                     .increment(1);
-                    return;
+                    return Ok(());
                 }
                 Err(err) if attempt < MAX_ATTEMPTS => {
                     tracing::warn!(attempt, error = %err, "Dispatch failed; retrying");
@@ -149,10 +175,11 @@ impl NotifyService {
                         "status" => "failed"
                     )
                     .increment(1);
-                    return;
+                    return Err(err.to_string());
                 }
             }
         }
+        Err("dispatch failed".into())
     }
 
     pub async fn dispatch_send(&self, request: &NotifyValue) -> Result<()> {
@@ -161,6 +188,7 @@ impl NotifyService {
         let result = match channel {
             "MSTEAMS" => self.send_teams(request).await,
             "EMAIL" => self.send_email(request).await,
+            "WEBHOOK" => self.send_webhook(request).await,
             other => anyhow::bail!("Unsupported channel `{other}`"),
         };
 
@@ -290,132 +318,179 @@ impl NotifyService {
         Ok(())
     }
 
+    async fn send_webhook(&self, request: &NotifyValue) -> Result<()> {
+        let target = self
+            .targets
+            .must_active(&request.target)
+            .await
+            .map_err(|msg| anyhow::anyhow!(msg))?;
+        let url = target.teams_webhook_url().ok_or_else(|| {
+            anyhow::anyhow!(
+                "target `{}` metadata.url is required for WEBHOOK",
+                request.target
+            )
+        })?;
+        let body = serde_json::json!({
+            "code": request.code,
+            "source": request.source,
+            "trace_id": request.trace_id,
+            "level": request.kind,
+            "title": request.title,
+            "data": request.payload,
+        });
+        self.http.post_json(&url, &HashMap::new(), &body).await?;
+        Ok(())
+    }
+
     async fn build_notify_message(
         &self,
         request: &NotifyRequest,
-        config: &NotificationData,
+        definition: &NotificationData,
     ) -> Result<NotifyMessage, String> {
-        self.sources.must_active(&config.source).await?;
-        let target = self.targets.must_active(&config.target).await?;
-        self.channels.must_active(&config.channel).await?;
-        let template = self.templates.must_active_by_id(config.template_id).await?;
+        let template = self
+            .templates
+            .must_active_by_id(definition.template_id)
+            .await?;
 
         let recipients = target.recipients();
-        if config.channel.eq_ignore_ascii_case("EMAIL") && !recipients.has_to() {
+        if definition.channel_code.eq_ignore_ascii_case("EMAIL") && !recipients.has_to() {
             return Err(format!(
                 "target `{}` metadata.to is required for EMAIL channel",
-                config.target
+                definition.target_code
             ));
-        }
-
-        if config.source.eq_ignore_ascii_case("AIRFLOW") {
-            let team = match &config.metadata {
-                Value::Object(m) => m
-                    .get("team")
-                    .and_then(|v| v.as_str())
-                    .map(str::trim)
-                    .unwrap_or(""),
-                _ => "",
-            };
-            if team.is_empty() {
-                return Err("notification metadata.team is required for AIRFLOW".into());
-            }
         }
 
         let (title, message) = template.merge_template(&request.variables);
         Ok(NotifyMessage::new(request)
-            .with_notification(config, template.name, recipients)
+            .with_definition(definition, template.name, recipients)
             .with_rendered(title, message))
     }
-
 }
 
 #[async_trait]
 impl NotifyServiceTrait for NotifyService {
     async fn validate(&self, request: NotifyRequest) -> AppResult<NotifyMessage> {
-        let noti = self.notifications.get_by_code(&request.code).await?;
-        if NotificationStatus::Active.as_str() != noti.status {
-            return Err(AppError::bad_request(format!(
-                "notification `{}` is not ACTIVE",
-                noti.code
-            )));
-        }
+        // definitions
+        let def = self.definitions.get_active_by_code(&request.code).await?;
 
-        self.build_notify_message(&request, &noti)
+        // sources
+        let source = self.sources.get_active_by_id(def.source_id).await?;
+
+        // channels
+        let channels = self.channels.get_active_by_id(def.channel_id).await?;
+
+        // target
+        let target = self.targets.get_active_by_id(def.target_id).await?;
+
+        let templates = self.templates.get_active_by_id(def.template_id).await?;
+
+        // templates
+        self.build_notify_message(&request, &definition)
             .await
             .map_err(AppError::bad_request)
     }
 
-    async fn notify(&self, message: NotifyMessage) -> AppResult<()> {
-        let cfg = config::load();
-        let use_kafka = cfg.kafka.enabled && self.kafka.is_some();
-        let value = &message.value;
-        let correlation_id = value.trace_id.as_str();
-        let title = value.title.clone().unwrap_or_default();
-        let rendered = value.message.clone().unwrap_or_default();
+    async fn notify(&self, mut message: NotifyMessage) -> AppResult<()> {
+        let source_code = message.value.source.clone();
+        let code = message.value.code.clone();
+        let definition_id = message.value.definition_id;
+        let idempotency_key = message.value.trace_id.clone();
+        let variables = Value::Object(message.value.variables.clone());
+        let drafts = vec![DeliveryDraft {
+            target_code: message.value.target.clone(),
+            channel_code: message.value.channel.clone(),
+            title: message.value.title.clone().unwrap_or_default(),
+            body: message.value.message.clone().unwrap_or_default(),
+            payload: message.value.payload.clone(),
+            destination: serde_json::to_value(&message.value.recipients)
+                .unwrap_or_else(|_| Value::Object(Default::default())),
+        }];
 
-        let recipients = serde_json::to_value(&value.recipients)
-            .unwrap_or_else(|_| Value::Object(Default::default()));
-        let metadata = Value::Object(Default::default());
-
-        if let Err(err) = self
-            .deliveries
-            .insert(
-                value.notification_id,
-                correlation_id,
-                &value.kind,
-                &title,
-                &rendered,
-                &recipients,
-                &value.payload,
-                &metadata,
+        let accepted = match self
+            .notifications
+            .accept(
+                definition_id,
+                &source_code,
+                &code,
+                &idempotency_key,
+                &variables,
+                &drafts,
             )
             .await
         {
-            tracing::error!(error = %err, code = %value.code, "insert delivery failed");
-            return Err(match err {
-                AppError::Conflict(_) => AppError::conflict(format!(
-                    "delivery already exists for notification `{}` correlation_id `{correlation_id}`",
-                    value.code
-                )),
-                err => err,
-            });
-        }
+            Ok(row) => row,
+            Err(AppError::Conflict(_)) => {
+                return Err(AppError::conflict(format!(
+                    "notification `{code}` already accepted for trace `{idempotency_key}`"
+                )));
+            }
+            Err(err) => {
+                tracing::error!(error = %err, code, "accept notification failed");
+                return Err(err);
+            }
+        };
 
-        if use_kafka {
-            let topic = cfg.kafka.topics.send.clone();
-            let kafka = self
-                .kafka
-                .as_ref()
-                .expect("kafka client present when kafka is enabled");
-            match kafka
-                .publish_json(
-                    &topic,
-                    correlation_id,
-                    &value.source,
-                    &value.kind,
-                    EVENT_TYPE_SEND,
-                    &message,
-                )
-                .await
-            {
-                Ok((partition, offset)) => {
-                    tracing::info!(
-                        topic,
-                        partition,
-                        offset,
-                        correlation_id,
-                        code = %value.code,
-                        "Notification published"
-                    );
+        message.value.notification_id = accepted.id;
+        message.value.delivery_id = accepted.delivery_id;
+
+        let cfg = config::load();
+        let use_kafka = cfg.kafka.enabled && self.kafka.is_some();
+        {
+            let value = &message.value;
+            if use_kafka {
+                let topic = cfg.kafka.topics.send.clone();
+                let kafka = self
+                    .kafka
+                    .as_ref()
+                    .expect("kafka client present when kafka is enabled");
+                match kafka
+                    .publish_json(
+                        &topic,
+                        &value.trace_id,
+                        &value.source,
+                        &value.kind,
+                        EVENT_TYPE_SEND,
+                        &message,
+                    )
+                    .await
+                {
+                    Ok((partition, offset)) => {
+                        tracing::info!(
+                            topic,
+                            partition,
+                            offset,
+                            trace_id = %value.trace_id,
+                            code = %value.code,
+                            delivery_id = value.delivery_id,
+                            "Notification published"
+                        );
+                    }
+                    Err(err) => {
+                        tracing::error!(error = %err, code = %value.code, "Kafka publish failed");
+                        let _ = self
+                            .deliveries
+                            .record_result(value.delivery_id, "FAILED", Some(&err))
+                            .await;
+                        return Err(AppError::internal(err));
+                    }
                 }
-                Err(err) => {
-                    tracing::error!(error = %err, code = %value.code, "Kafka publish failed");
-                    return Err(AppError::internal(err));
+            } else {
+                match self.dispatch_direct_send(value).await {
+                    Ok(()) => {
+                        self.deliveries
+                            .record_result(value.delivery_id, "SENT", None)
+                            .await?;
+                    }
+                    Err(err) => {
+                        let message = err.to_string();
+                        let _ = self
+                            .deliveries
+                            .record_result(value.delivery_id, "FAILED", Some(&message))
+                            .await;
+                        return Err(err);
+                    }
                 }
             }
-        } else {
-            self.dispatch_direct_send(value).await?;
         }
 
         Ok(())

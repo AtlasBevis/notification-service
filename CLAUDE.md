@@ -8,8 +8,8 @@ Hướng dẫn cho AI assistant khi làm việc trong repository này.
 
 **data-notification** là HTTP microservice (Rust + Axum) dùng để:
 
-1. Nhận thông báo từ các app nội bộ (`POST /notification/notify`)
-2. Publish lên Kafka (API) — process `notification-consumer` gửi TEAMS / EMAIL
+1. Nhận thông báo từ các app nội bộ (`POST /notification/notify`: `code`, `trace_id`, `variables`)
+2. `notification_definitions` là catalog; `notifications` + `deliveries` là request. Worker gửi EMAIL / MSTEAMS / WEBHOOK
 3. Bảo vệ endpoint bằng header `api-key` (logging middleware trên protected routes)
 
 Default listen: `0.0.0.0:8080` (xem `config.yaml` / env).
