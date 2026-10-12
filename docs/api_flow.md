@@ -8,15 +8,20 @@
 |---|---|
 | `sources` | Services allowed to send notifications |
 | `channels` | Delivery types: `EMAIL`, `MSTEAMS`, `WEBHOOK` |
-| `targets` | Destination data associated with a channel |
+| `targets` | Reusable destination groups associated with a channel |
+| `definition_targets` | Maps each definition to one or more destination groups |
 | `templates` | Message title and body, rendered with `{{key}}` |
-| `webhook_configs` | Webhook endpoint, method, timeout, and retry configuration |
-| `definitions` | Maps a caller `code` to its source, channel, target, and template |
+| `webhook_configs` | Webhook endpoint, method, timeout, and retry configuration; one row per WEBHOOK target |
+| `definitions` | Maps a caller `code` to its source, channel, selected targets, and template |
 | `notifications` | Runtime record for an accepted send request |
 | `deliveries` | Rendered message and delivery status |
 | `delivery_attempts` | Individual dispatch attempts |
 
 The service has no `/notification` CRUD endpoint for `definitions`; definitions are provisioned in the database. Source, target, and template configuration endpoints remain available under `/notification/sources`, `/notification/targets`, and `/notification/templates`.
+
+Each definition links to one or more targets through `definition_targets`. That table's `payload` column is a JSON object template for WEBHOOK targets. Placeholders such as `{{date_key}}` are replaced from the request's `variables`; each target gets its own rendered request body. EMAIL merges recipients from selected targets, while MSTEAMS and WEBHOOK send separately to each selected target.
+
+Webhook requests use the shared `HttpClient` created by `Infrastructure` and injected into `WebhookService`. This keeps webhook and token calls on the application's configured HTTP client and middleware; `WebhookService` does not build a separate `reqwest::Client`. Endpoint timeout settings are applied to each request.
 
 ## Send sequence
 

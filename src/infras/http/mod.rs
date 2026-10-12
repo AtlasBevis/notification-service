@@ -29,6 +29,30 @@ pub fn build_http_client(timeout_secs: u64) -> Result<HttpClient> {
 }
 
 impl HttpClient {
+    /// Send a request through the shared middleware client with a per-request timeout.
+    pub async fn request_with_timeout(
+        &self,
+        method: Method,
+        url: &str,
+        headers: &HashMap<String, String>,
+        body: Option<Vec<u8>>,
+        timeout: Duration,
+    ) -> Result<Response> {
+        let mut request = self.inner.request(method.clone(), url).timeout(timeout);
+        for (name, value) in headers {
+            if !name.trim().is_empty() {
+                request = request.header(name, value);
+            }
+        }
+        if let Some(body) = body {
+            request = request.body(body);
+        }
+        request
+            .send()
+            .await
+            .with_context(|| format!("HTTP {method} {url} failed"))
+    }
+
     pub async fn get(&self, url: &str, headers: &HashMap<String, String>) -> Result<Response> {
         self.request(Method::GET, url, headers, None).await
     }

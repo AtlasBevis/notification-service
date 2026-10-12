@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::enums::{Level, Status};
 use crate::error::{AppError, AppResult};
@@ -14,8 +15,8 @@ pub struct DefinitionData {
     pub level: Level,
     pub source_id: i32,
     pub channel_id: i32,
-    pub target_id: i32,
-    pub template_id: i32,
+    pub targets: Vec<DefinitionTarget>,
+    pub template_id: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
@@ -37,10 +38,18 @@ impl DefinitionData {
             })?,
             source_id: row.get("source_id"),
             channel_id: row.get("channel_id"),
-            target_id: row.get("target_id"),
+            targets: serde_json::from_value(row.get("target_payloads")).map_err(|error| {
+                AppError::internal(format!("invalid target payload mapping: {error}"))
+            })?,
             template_id: row.get("template_id"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
             updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
         })
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DefinitionTarget {
+    pub target_id: i32,
+    pub payload: Value,
 }

@@ -15,7 +15,7 @@ pub mod api_response;
 pub use api_request::ApiRequest;
 pub use api_response::ApiResponse;
 pub use channel::ChannelData;
-pub use definition::DefinitionData;
+pub use definition::{DefinitionData, DefinitionTarget};
 pub use notification::{AcceptedNotification, DeliveryDraft};
 pub use notify_msg::{NotifyKey, NotifyMessage, NotifyValue, EVENT_TYPE_SEND};
 pub use notify_request::NotifyRequest;

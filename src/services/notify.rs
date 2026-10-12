@@ -209,7 +209,7 @@ impl NotifyService {
         if request.channel != Channel::WEBHOOK {
             return MAX_ATTEMPTS;
         }
-        match self.webhooks.max_attempts(request.channel_id).await {
+        match self.webhooks.max_attempts(request.definition_id).await {
             Ok(attempts) => attempts.max(1),
             Err(err) => {
                 tracing::warn!(error = %err, "Could not resolve webhook retry policy");
@@ -258,19 +258,32 @@ impl NotifyService {
         request: &NotifyRequest,
         definition: &DefinitionData,
         channel: &crate::models::ChannelData,
-        target: Option<&TargetData>,
+        targets: &[TargetData],
     ) -> AppResult<NotifyMessage> {
         let channel_code = channel.code.as_str();
+        let template_id = definition.template_id.ok_or_else(|| {
+            AppError::bad_request(format!("definition `{}` has no template", definition.code))
+        })?;
         let template = self
             .templates
-            .get_active_by_id(i64::from(definition.template_id))
+            .get_active_by_id(i64::from(template_id))
             .await?;
 
-        let recipients = target.map(TargetData::recipients).unwrap_or_default();
+        let mut recipients = crate::models::Recipients::default();
+        for target in targets {
+            let group = target.recipients();
+            recipients.to.extend(group.to);
+            recipients.cc.extend(group.cc);
+            recipients.bcc.extend(group.bcc);
+        }
         if channel_code.eq_ignore_ascii_case(Channel::EMAIL.as_str()) && !recipients.has_to() {
             return Err(AppError::bad_request(format!(
                 "target `{}` metadata.to is required for EMAIL channel",
-                target.map(|item| item.code.as_str()).unwrap_or("")
+                targets
+                    .iter()
+                    .map(|item| item.code.as_str())
+                    .collect::<Vec<_>>()
+                    .join(",")
             )));
         }
 
@@ -280,7 +293,8 @@ impl NotifyService {
             .map_err(AppError::bad_request)?
             .with_channel(channel)
             .map_err(AppError::bad_request)?
-            .with_target(target)
+            .with_targets(targets)
+            .with_target_payloads(&definition.targets)
             .with_template(template.name)
             .with_recipients(recipients)
             .with_rendered(title, message))
@@ -304,24 +318,31 @@ impl NotifyTrait for NotifyService {
             .get_active_by_id(definition.channel_id)
             .await?;
         let kind = channel.code;
-        let target = match kind {
-            Channel::WEBHOOK => {
-                self.webhooks.validate(channel.id).await?;
-                None
+        if definition.targets.is_empty() {
+            return Err(AppError::bad_request(format!(
+                "definition `{}` has no targets",
+                definition.code
+            )));
+        }
+        let mut targets = Vec::with_capacity(definition.targets.len());
+        for definition_target in &definition.targets {
+            let target = self
+                .targets
+                .get_active_by_id(definition_target.target_id)
+                .await?;
+            if target.channel_code != channel.code {
+                return Err(AppError::bad_request(format!(
+                    "target `{}` does not belong to channel `{}`",
+                    target.code, channel.code
+                )));
             }
-            Channel::EMAIL | Channel::MSTEAMS => {
-                let target = self.targets.get_active_by_id(definition.target_id).await?;
-                if target.channel_code != channel.code {
-                    return Err(AppError::bad_request(format!(
-                        "target `{}` does not belong to channel `{}`",
-                        target.code, channel.code
-                    )));
-                }
-                Some(target)
-            }
-        };
+            targets.push(target);
+        }
+        if kind == Channel::WEBHOOK {
+            self.webhooks.validate(&definition).await?;
+        }
 
-        self.build_notify_message(&request, &definition, &channel, target.as_ref())
+        self.build_notify_message(&request, &definition, &channel, &targets)
             .await
     }
 

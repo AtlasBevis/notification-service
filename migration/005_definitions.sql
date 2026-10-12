@@ -14,6 +14,17 @@ CREATE TABLE definitions (
   
   source_id         INT   NOT NULL REFERENCES sources (id),
   channel_id        INT   NOT NULL REFERENCES channels (id),
-  target_id         INT   REFERENCES targets (id),
   template_id       INT   REFERENCES templates (id)
 );
+
+-- A definition may deliver to multiple destination groups on its channel.
+-- payload is the per-target webhook body template; {{variable}} placeholders
+-- are populated from the incoming notification variables at dispatch time.
+CREATE TABLE definition_targets (
+  id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  definition_id       BIGINT NOT NULL REFERENCES definitions (id) ON DELETE CASCADE,
+  target_id           INT NOT NULL REFERENCES targets (id) ON DELETE RESTRICT,
+  payload             JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_definition_targets_definition_id ON definition_targets (definition_id);

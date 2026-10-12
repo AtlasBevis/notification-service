@@ -12,24 +12,40 @@ impl WebhookRepository {
         Self { pool }
     }
 
-    pub async fn find_by_channel_id(&self, channel_id: i32) -> AppResult<WebhookConfig> {
+    pub async fn find_by_id(&self, id: i32) -> AppResult<WebhookConfig> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT id, channel_id, domain, path, method, timeout_seconds, max_retries,
+                "SELECT id, target_id, service_name, domain, path, method, timeout_seconds, max_retries,
                         headers
                  FROM webhook_configs
-                 WHERE channel_id = $1",
-                &[&channel_id],
+                 WHERE id = $1",
+                &[&id],
             )
             .await?
-            .ok_or_else(|| {
-                AppError::not_found(format!(
-                    "webhook config for channel id `{channel_id}` not found"
-                ))
-            })?;
+            .ok_or_else(|| AppError::not_found(format!("webhook config id `{id}` not found")))?;
 
         WebhookConfig::map_row(&row)
+    }
+
+    pub async fn find_by_definition_id(&self, definition_id: i64) -> AppResult<Vec<WebhookConfig>> {
+        let client = self.pool.get().await?;
+        let rows = client
+            .query(
+                "SELECT w.id, w.target_id, w.service_name, w.domain, w.path, w.method,
+                    w.timeout_seconds, w.max_retries, w.headers
+             FROM definition_targets dt
+             JOIN webhook_configs w ON w.target_id = dt.target_id
+             WHERE dt.definition_id = $1 ORDER BY dt.id",
+                &[&definition_id],
+            )
+            .await?;
+        if rows.is_empty() {
+            return Err(AppError::not_found(format!(
+                "webhook routes for definition `{definition_id}` not found"
+            )));
+        }
+        rows.iter().map(WebhookConfig::map_row).collect()
     }
 
     /// Loads the required authentication configuration for a webhook config.

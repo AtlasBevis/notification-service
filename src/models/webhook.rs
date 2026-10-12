@@ -39,7 +39,8 @@ impl TokenBodyFormat {
 #[derive(Debug, Clone)]
 pub struct WebhookConfig {
     pub id: i32,
-    pub channel_id: i32,
+    pub target_id: i32,
+    pub service_name: String,
     pub endpoint_url: String,
     pub http_method: Method,
     pub timeout_seconds: u64,
@@ -82,7 +83,8 @@ impl WebhookConfig {
 
         Ok(Self {
             id: row.get("id"),
-            channel_id: row.get("channel_id"),
+            target_id: row.get("target_id"),
+            service_name: row.get("service_name"),
             endpoint_url,
             http_method,
             timeout_seconds: timeout_seconds as u64,

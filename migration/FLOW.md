@@ -16,16 +16,16 @@ Get-ChildItem migration\*.sql | Sort-Object Name | ForEach-Object {
 |---|---|
 | `001_sources.sql` | Sources allowed to call the service |
 | `002_channels.sql` | Delivery channel catalog |
-| `003_targets.sql` | Destinations attached to channels |
+| `003_targets.sql` | Reusable destination groups for EMAIL, MSTEAMS, and WEBHOOK |
 | `004_templates.sql` | Versioned message templates |
-| `005_definitions.sql` | `code` to source/channel/target/template mapping |
+| `005_definitions.sql` | `code` to source/channel/template mapping and definition-to-target groups |
 | `006_notifications.sql` | Accepted request and trace ID uniqueness |
 | `007_deliveries.sql` | Rendered message and current delivery state |
 | `008_delivery_attempts.sql` | Dispatch attempt history |
-| `009_webhook_config.sql` | Webhook endpoint and outgoing headers |
-| `010_webhook_auth_configs.sql` | Static or token endpoint authentication |
+| `009_webhook_config.sql` | Webhook endpoint configuration linked to a target |
+| `010_webhook_auth_configs.sql` | Static or token endpoint authentication per webhook target |
 
-After the migrations, add each notification definition directly to `definitions` and associate it with existing source, channel, target, and template rows. Each webhook channel needs a `webhook_configs` row and a `webhook_auth_configs` row. Use `auth_mode = STATIC` with `header_value`, or `auth_mode = TOKEN_ENDPOINT` with `token_url` and the token request/response fields. Put additional outgoing headers such as `{"service":"MIS"}` in `webhook_configs.headers`.
+After the migrations, create target groups with the matching `channel_id`, then link one or more targets to each definition through `definition_targets`. EMAIL target metadata contains recipient arrays (`to`, `cc`, `bcc`); all selected groups are combined into one email. Each MSTEAMS target contains its Teams webhook URL and is sent separately. Each WEBHOOK target has one `webhook_configs` row, with its own endpoint, headers, and `webhook_auth_configs` row. `definition_targets.payload` defines that target's webhook body; string placeholders such as `{{date_key}}` are filled from the notify request's `variables`. For example, a target payload can be `{"requestId":"{{requestId}}","data":{"date_key":"{{date_key}}"}}`. The worker sends each target its own rendered payload and records one aggregate delivery result.
 
 ## Runtime lifecycle
 

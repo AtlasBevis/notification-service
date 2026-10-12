@@ -34,11 +34,8 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
     let targets_service = Arc::new(TargetsService::new(targets_repo.clone()));
     let templates_service = Arc::new(TemplateService::new(templates_repo));
     let webhook_service = Arc::new(WebhookService::new(
-        reqwest::Client::builder()
-            .build()
-            .context("Failed to build webhook HTTP client")?,
+        infras.http_client.clone(),
         WebhookRepository::new(pool),
-        channels_service.clone(),
     ));
     let email_service = Arc::new(EmailService::new(channels_service.clone()));
     let teams_service = Arc::new(MSService::new(
@@ -120,11 +117,8 @@ pub async fn build_notification_consumer(config: &Config) -> Result<Arc<NotifySe
         pool.clone(),
     )));
     let webhook_service = Arc::new(WebhookService::new(
-        reqwest::Client::builder()
-            .build()
-            .context("Failed to build webhook HTTP client")?,
+        infras.http_client.clone(),
         WebhookRepository::new(pool.clone()),
-        channels_service.clone(),
     ));
     let email_service = Arc::new(EmailService::new(channels_service.clone()));
     let teams_service = Arc::new(MSService::new(

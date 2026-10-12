@@ -4,37 +4,38 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use reqwest::{Client, Method, StatusCode, Url};
+use reqwest::{Method, StatusCode, Url};
 use serde_json::Value;
 use tokio::sync::Mutex;
 
 use crate::enums::Method as ConfiguredMethod;
 use crate::error::{AppError, AppResult};
+use crate::infras::http::HttpClient;
 use crate::models::{
-    NotifyValue, TokenBodyFormat, WebhookAuthConfig, WebhookAuthMode, WebhookConfig, WebhookPayload,
+    DefinitionData, NotifyValue, TokenBodyFormat, WebhookAuthConfig, WebhookAuthMode,
+    WebhookConfig, WebhookPayload,
 };
 use crate::repository::WebhookRepository;
-use crate::services::ChannelTrait;
 
 const TOKEN_EXPIRY_SKEW: Duration = Duration::from_secs(30);
 
 #[async_trait]
 pub trait WebhookServiceTrait: Send + Sync {
-    async fn validate(&self, channel_id: i32) -> AppResult<()>;
-    async fn get_config(&self, channel_id: i32) -> AppResult<WebhookConfig>;
+    /// Checks the webhook config and auth config a WEBHOOK definition points at.
+    async fn validate(&self, definition: &DefinitionData) -> AppResult<()>;
+    async fn get_config(&self, webhook_config_id: i32) -> AppResult<WebhookConfig>;
     async fn get_webhook_auth_configs(
         &self,
         webhook_config_id: i32,
     ) -> AppResult<WebhookAuthConfig>;
-    async fn max_attempts(&self, channel_id: i32) -> AppResult<u32>;
+    async fn max_attempts(&self, definition_id: i64) -> AppResult<u32>;
     async fn send_webhook(&self, request: &NotifyValue) -> AppResult<()>;
 }
 
 #[derive(Clone)]
 pub struct WebhookService {
-    client: Client,
+    client: Arc<HttpClient>,
     repo: WebhookRepository,
-    channels: Arc<dyn ChannelTrait>,
     tokens: Arc<Mutex<HashMap<i32, CachedToken>>>,
 }
 
@@ -45,11 +46,10 @@ struct CachedToken {
 }
 
 impl WebhookService {
-    pub fn new(client: Client, repo: WebhookRepository, channels: Arc<dyn ChannelTrait>) -> Self {
+    pub fn new(client: Arc<HttpClient>, repo: WebhookRepository) -> Self {
         Self {
             client,
             repo,
-            channels,
             tokens: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -81,8 +81,8 @@ impl WebhookService {
         }
     }
 
-    fn map_send_error(step: &str, err: reqwest::Error) -> AppError {
-        if err.is_timeout() {
+    fn map_send_error(step: &str, err: anyhow::Error) -> AppError {
+        if err.to_string().to_ascii_lowercase().contains("timed out") {
             AppError::internal(format!("{step} request timed out"))
         } else {
             AppError::internal(format!("{step} connection failed"))
@@ -134,6 +134,18 @@ impl WebhookService {
         Ok(map)
     }
 
+    fn plain_headers(headers: &HeaderMap) -> AppResult<HashMap<String, String>> {
+        headers
+            .iter()
+            .map(|(name, value)| {
+                let value = value
+                    .to_str()
+                    .map_err(|_| AppError::internal("webhook header value is invalid"))?;
+                Ok((name.as_str().to_string(), value.to_string()))
+            })
+            .collect()
+    }
+
     fn outgoing_headers(
         config: &WebhookConfig,
         auth: (&HeaderName, HeaderValue),
@@ -167,6 +179,28 @@ impl WebhookService {
             .collect()
     }
 
+    fn form_body(fields: &[(String, String)]) -> Vec<u8> {
+        fn encode(value: &str) -> String {
+            let mut encoded = String::new();
+            for byte in value.bytes() {
+                if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'*') {
+                    encoded.push(char::from(byte));
+                } else if byte == b' ' {
+                    encoded.push('+');
+                } else {
+                    encoded.push_str(&format!("%{byte:02X}"));
+                }
+            }
+            encoded
+        }
+        fields
+            .iter()
+            .map(|(key, value)| format!("{}={}", encode(key), encode(value)))
+            .collect::<Vec<_>>()
+            .join("&")
+            .into_bytes()
+    }
+
     fn json_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
         path.split('.')
             .filter(|segment| !segment.is_empty())
@@ -191,22 +225,28 @@ impl WebhookService {
             .token_url
             .as_deref()
             .ok_or_else(|| AppError::internal("webhook token URL is required"))?;
-        let url = Self::validate_endpoint(token_url)?;
+        Self::validate_endpoint(token_url)?;
         let method = Self::token_method(auth.token_method);
-        let mut request = self
+        let headers = Self::plain_headers(&Self::static_headers(&auth.request_headers)?)?;
+        let body = if method == Method::GET {
+            None
+        } else {
+            Some(match auth.token_body_format {
+                TokenBodyFormat::Json => serde_json::to_vec(&auth.request_body).map_err(|_| {
+                    AppError::internal("webhook token request body serialization failed")
+                })?,
+                TokenBodyFormat::Form => Self::form_body(&Self::form_fields(&auth.request_body)),
+            })
+        };
+        let response = self
             .client
-            .request(method.clone(), url)
-            .timeout(Duration::from_secs(auth.timeout_seconds.max(1)))
-            .headers(Self::static_headers(&auth.request_headers)?);
-        if method != Method::GET {
-            request = match auth.token_body_format {
-                TokenBodyFormat::Json => request.json(&auth.request_body),
-                TokenBodyFormat::Form => request.form(&Self::form_fields(&auth.request_body)),
-            };
-        }
-
-        let response = request
-            .send()
+            .request_with_timeout(
+                method,
+                token_url,
+                &headers,
+                body,
+                Duration::from_secs(auth.timeout_seconds.max(1)),
+            )
             .await
             .map_err(|err| Self::map_send_error("webhook token", err))?;
         if !response.status().is_success() {
@@ -265,18 +305,15 @@ impl WebhookService {
         payload: &WebhookPayload,
         headers: HeaderMap,
     ) -> AppResult<StatusCode> {
-        let url = Self::validate_endpoint(&config.endpoint_url)?;
+        Self::validate_endpoint(&config.endpoint_url)?;
         let method = Self::request_method(config.http_method)?;
         let timeout = Duration::from_secs(config.timeout_seconds.max(1));
-
-        let request = self
+        let headers = Self::plain_headers(&headers)?;
+        let body = serde_json::to_vec(payload)
+            .map_err(|_| AppError::internal("webhook payload serialization failed"))?;
+        let response = self
             .client
-            .request(method, url)
-            .timeout(timeout)
-            .json(payload)
-            .headers(headers);
-        let response = request
-            .send()
+            .request_with_timeout(method, &config.endpoint_url, &headers, Some(body), timeout)
             .await
             .map_err(|err| Self::map_send_error("webhook", err))?;
         Ok(response.status())
@@ -305,21 +342,84 @@ impl WebhookService {
             )))
         }
     }
+
+    fn merge_payload(value: &Value, variables: &serde_json::Map<String, Value>) -> Value {
+        match value {
+            Value::String(template) => {
+                let trimmed = template.trim();
+                if trimmed.starts_with("{{") && trimmed.ends_with("}}") && trimmed.len() > 4 {
+                    let key = trimmed[2..trimmed.len() - 2].trim();
+                    if let Some(value) = Self::variable_path(variables, key) {
+                        return value.clone();
+                    }
+                }
+                let mut rendered = template.clone();
+                for (key, value) in variables {
+                    let replacement = match value {
+                        Value::String(text) => text.clone(),
+                        other => other.to_string(),
+                    };
+                    rendered = rendered.replace(&format!("{{{{{key}}}}}"), &replacement);
+                }
+                Value::String(rendered)
+            }
+            Value::Array(items) => Value::Array(
+                items
+                    .iter()
+                    .map(|item| Self::merge_payload(item, variables))
+                    .collect(),
+            ),
+            Value::Object(items) => Value::Object(
+                items
+                    .iter()
+                    .map(|(key, value)| (key.clone(), Self::merge_payload(value, variables)))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+
+    fn variable_path<'a>(
+        variables: &'a serde_json::Map<String, Value>,
+        path: &str,
+    ) -> Option<&'a Value> {
+        let mut segments = path.split('.');
+        let first = segments.next()?;
+        segments.try_fold(variables.get(first)?, |value, segment| value.get(segment))
+    }
 }
 
 #[async_trait]
 impl WebhookServiceTrait for WebhookService {
-    async fn validate(&self, channel_id: i32) -> AppResult<()> {
-        let config = self.repo.find_by_channel_id(channel_id).await?;
-        Self::static_headers(&config.headers)?;
-        let auth = self.repo.find_auth_by_webhook_config_id(config.id).await?;
-        Self::validate_auth(&auth)?;
+    async fn validate(&self, definition: &DefinitionData) -> AppResult<()> {
+        let configs = self.repo.find_by_definition_id(definition.id).await?;
+        if configs.len() != definition.targets.len() {
+            return Err(AppError::bad_request(format!(
+                "definition `{}` has a WEBHOOK target without webhook_configs",
+                definition.code
+            )));
+        }
+        for target in &definition.targets {
+            if !target.payload.is_object() {
+                return Err(AppError::bad_request(format!(
+                    "payload for definition target `{}` must be a JSON object",
+                    target.target_id
+                )));
+            }
+        }
+        for config in configs {
+            Self::validate_endpoint(&config.endpoint_url)?;
+            Self::request_method(config.http_method)?;
+            Self::static_headers(&config.headers)?;
+            let auth = self.repo.find_auth_by_webhook_config_id(config.id).await?;
+            Self::validate_auth(&auth)?;
+        }
         Ok(())
     }
 
-    async fn get_config(&self, channel_id: i32) -> AppResult<WebhookConfig> {
-        self.channels.get_active_by_id(channel_id).await?;
-        self.repo.find_by_channel_id(channel_id).await
+    async fn get_config(&self, webhook_config_id: i32) -> AppResult<WebhookConfig> {
+        let config = self.repo.find_by_id(webhook_config_id).await?;
+        Ok(config)
     }
 
     async fn get_webhook_auth_configs(
@@ -331,13 +431,56 @@ impl WebhookServiceTrait for WebhookService {
             .await
     }
 
-    async fn max_attempts(&self, _channel_id: i32) -> AppResult<u32> {
-        Ok(1)
+    async fn max_attempts(&self, definition_id: i64) -> AppResult<u32> {
+        let configs = self.repo.find_by_definition_id(definition_id).await?;
+        Ok(configs
+            .iter()
+            .map(|config| config.max_retries.saturating_add(1))
+            .max()
+            .unwrap_or(1))
     }
 
     async fn send_webhook(&self, request: &NotifyValue) -> AppResult<()> {
-        let config = self.get_config(request.channel_id).await?;
-        let auth = self.get_webhook_auth_configs(config.id).await?;
-        self.deliver(&config, &request.variables, &auth).await
+        let configs = self
+            .repo
+            .find_by_definition_id(request.definition_id)
+            .await?;
+        let mut failures = Vec::new();
+        for config in configs {
+            let result = async {
+                let auth = self.repo.find_auth_by_webhook_config_id(config.id).await?;
+                let configured_payload = request
+                    .target_payloads
+                    .iter()
+                    .find(|item| item.target_id == config.target_id)
+                    .map(|item| &item.payload)
+                    .ok_or_else(|| {
+                        AppError::internal(format!(
+                            "missing payload for webhook target `{}`",
+                            config.target_id
+                        ))
+                    })?;
+                let payload = Self::merge_payload(configured_payload, &request.variables);
+                let payload = payload.as_object().ok_or_else(|| {
+                    AppError::bad_request(format!(
+                        "webhook payload for target `{}` must be a JSON object",
+                        config.target_id
+                    ))
+                })?;
+                self.deliver(&config, payload, &auth).await
+            }
+            .await;
+            if let Err(error) = result {
+                failures.push(format!("{}: {}", config.service_name, error));
+            }
+        }
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(AppError::internal(format!(
+                "webhook delivery failed: {}",
+                failures.join("; ")
+            )))
+        }
     }
 }

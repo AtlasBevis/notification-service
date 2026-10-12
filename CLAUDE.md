@@ -12,7 +12,7 @@ Repository guidance for AI assistants working on this Rust + Axum + Kafka notifi
 
 Default listen address is `0.0.0.0:8080` (see `config.yaml` and environment overrides).
 
-Every webhook config must have a row in `webhook_auth_configs`; a missing row is `AppError::NotFound`. `auth_mode = STATIC` sends `header_value` as `header_name`. `auth_mode = TOKEN_ENDPOINT` obtains and caches a token from `token_url`, then sends it using `header_name` and `header_prefix`. `webhook_configs.headers` contains additional static outgoing headers; auth header values take precedence on duplicate names. Never log or serialize static secrets or tokens. Each delivery calls the webhook endpoint once.
+Every webhook config must have a row in `webhook_auth_configs`; a missing row is `AppError::NotFound`. `auth_mode = STATIC` sends `header_value` as `header_name`. `auth_mode = TOKEN_ENDPOINT` obtains and caches a token from `token_url`, then sends it using `header_name` and `header_prefix`. `webhook_configs.headers` contains additional static outgoing headers; auth header values take precedence on duplicate names. Webhook calls use the shared `HttpClient` from `Infrastructure`, injected into `WebhookService`; do not build a separate HTTP client for webhooks. Never log or serialize static secrets or tokens. Each selected target endpoint is called once per dispatch.
 
 ## Database constraints and validation
 

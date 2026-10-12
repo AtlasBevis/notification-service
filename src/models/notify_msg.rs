@@ -3,7 +3,7 @@ use serde_json::{Map, Value};
 
 use crate::{
     enums::{Channel, Level},
-    models::{ChannelData, DefinitionData, NotifyRequest, Recipients},
+    models::{ChannelData, DefinitionData, DefinitionTarget, NotifyRequest, Recipients},
 };
 
 pub const EVENT_TYPE_SEND: &str = "notification.send";
@@ -38,7 +38,9 @@ pub struct NotifyValue {
 
     pub delivery_id: i64,
     pub target: String,
-    pub target_id: i32,
+    pub target_ids: Vec<i32>,
+    #[serde(default)]
+    pub target_payloads: Vec<DefinitionTarget>,
     pub template: String,
 
     pub title: Option<String>,
@@ -65,7 +67,8 @@ impl NotifyMessage {
                 channel_id: 0,
                 delivery_id: 0,
                 target: String::new(),
-                target_id: 0,
+                target_ids: Vec::new(),
+                target_payloads: Vec::new(),
                 channel: Channel::EMAIL,
                 level: Level::Info,
                 template: String::new(),
@@ -90,11 +93,18 @@ impl NotifyMessage {
         Ok(self)
     }
 
-    pub fn with_target(mut self, target: Option<&crate::models::TargetData>) -> Self {
-        if let Some(target) = target {
-            self.value.target = target.code.clone();
-            self.value.target_id = target.id;
-        }
+    pub fn with_targets(mut self, targets: &[crate::models::TargetData]) -> Self {
+        self.value.target = targets
+            .iter()
+            .map(|target| target.code.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        self.value.target_ids = targets.iter().map(|target| target.id).collect();
+        self
+    }
+
+    pub fn with_target_payloads(mut self, targets: &[DefinitionTarget]) -> Self {
+        self.value.target_payloads = targets.to_vec();
         self
     }
 
