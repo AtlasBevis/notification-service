@@ -14,8 +14,8 @@ CREATE TABLE channels (
   metadata          JSONB        NOT NULL DEFAULT '{}'::jsonb
 );
 
--- example
--- INSERT INTO channels (code, name, metadata, updated_at) VALUES
---   ('EMAIL',    'Email',            '{"host": "", "username": "", "password": ""}'::jsonb, now()),
---   ('MSTEAMS',  'Microsoft Teams',  '{}'::jsonb, now()),
---   ('WEBHOOK',  'HTTP webhook',     '{"timeout_ms": 5000}'::jsonb, now());
+-- data
+INSERT INTO channels (code, name, metadata, updated_at) VALUES
+  ('EMAIL',    'Email',            '{"host": "", "username": "", "password": ""}'::jsonb, now()),
+  ('MSTEAMS',  'Microsoft Teams',  '{}'::jsonb, now()),
+  ('WEBHOOK',  'HTTP webhook',     '{"timeout_ms": 5000}'::jsonb, now());

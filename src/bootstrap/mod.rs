@@ -8,8 +8,9 @@ use crate::repository::{
     SourceRepository, TargetsRepository, TemplateRepository, WebhookRepository,
 };
 use crate::services::{
-    ChannelService, ChannelTrait, DefinitionService, NotificationService, NotifyService,
-    SourceService, SourceTrait, TargetTrait, TargetsService, TemplateService, WebhookService,
+    ChannelService, ChannelTrait, DefinitionService, EmailService, MSService, NotificationService,
+    NotifyService, SourceService, SourceTrait, TargetTrait, TargetsService, TemplateService,
+    WebhookService,
 };
 use crate::state::{AppState, SharedState};
 
@@ -27,17 +28,24 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
     let definitions_service = Arc::new(DefinitionService::new(DefinitionRepository::new(
         pool.clone(),
     )));
-    let webhook_configs = WebhookRepository::new(pool);
-    let webhook_service = Arc::new(WebhookService::new(
-        reqwest::Client::builder()
-            .build()
-            .context("Failed to build webhook HTTP client")?,
-    ));
 
     let channels_service = Arc::new(ChannelService::new(channels_repo.clone()));
     let sources_service = Arc::new(SourceService::new(sources_repo.clone()));
     let targets_service = Arc::new(TargetsService::new(targets_repo.clone()));
     let templates_service = Arc::new(TemplateService::new(templates_repo));
+    let webhook_service = Arc::new(WebhookService::new(
+        reqwest::Client::builder()
+            .build()
+            .context("Failed to build webhook HTTP client")?,
+        WebhookRepository::new(pool),
+        channels_service.clone(),
+    ));
+    let email_service = Arc::new(EmailService::new(channels_service.clone()));
+    let teams_service = Arc::new(MSService::new(
+        infras.http_client.clone(),
+        channels_service.clone(),
+        targets_service.clone(),
+    ));
 
     channels_service
         .load()
@@ -61,16 +69,16 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
     ));
     let notify_service = Arc::new(NotifyService::new(
         infras.kafka.clone(),
-        infras.http_client.clone(),
         definitions_service,
         notification_service.clone(),
         deliveries_repo,
-        webhook_configs,
-        webhook_service,
         sources_service.clone(),
         targets_service.clone(),
         channels_service.clone(),
         templates_service.clone(),
+        email_service,
+        teams_service,
+        webhook_service,
     ));
 
     Ok(Arc::new(AppState {
@@ -122,20 +130,28 @@ pub async fn build_notification_consumer(config: &Config) -> Result<Arc<NotifySe
         reqwest::Client::builder()
             .build()
             .context("Failed to build webhook HTTP client")?,
+        WebhookRepository::new(pool.clone()),
+        channels_service.clone(),
+    ));
+    let email_service = Arc::new(EmailService::new(channels_service.clone()));
+    let teams_service = Arc::new(MSService::new(
+        infras.http_client,
+        channels_service.clone(),
+        targets_service.clone(),
     ));
     Ok(Arc::new(NotifyService::new(
         Some(kafka),
-        infras.http_client,
         Arc::new(DefinitionService::new(DefinitionRepository::new(
             pool.clone(),
         ))),
         notification_service,
-        DeliveriesRepository::new(pool.clone()),
-        WebhookRepository::new(pool),
-        webhook_service,
+        DeliveriesRepository::new(pool),
         sources_service,
         targets_service,
         channels_service,
         templates_service,
+        email_service,
+        teams_service,
+        webhook_service,
     )))
 }

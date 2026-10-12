@@ -1,28 +1,76 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use axum::async_trait;
+use async_trait::async_trait;
+use serde_json::Value;
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::infras::http::HttpClient;
+use crate::models::NotifyValue;
+use crate::services::template::wrap_teams_message;
+use crate::services::{ChannelService, ChannelTrait, TargetTrait, TargetsService};
 
 #[async_trait]
 pub trait MSTrait: Send + Sync {
-    async fn send_teams() -> AppResult<()>;
+    async fn send_teams(&self, request: &NotifyValue) -> AppResult<()>;
 }
 
+#[derive(Clone)]
 pub struct MSService {
     http: Arc<HttpClient>,
+    channels: Arc<ChannelService>,
+    targets: Arc<TargetsService>,
+}
+
+impl MSService {
+    pub fn new(
+        http: Arc<HttpClient>,
+        channels: Arc<ChannelService>,
+        targets: Arc<TargetsService>,
+    ) -> Self {
+        Self {
+            http,
+            channels,
+            targets,
+        }
+    }
 }
 
 #[async_trait]
 impl MSTrait for MSService {
-    async fn send_teams() -> AppResult<()> {
-        Ok(())
-    }
-}
+    async fn send_teams(&self, request: &NotifyValue) -> AppResult<()> {
+        let channel = self
+            .channels
+            .must_active(&request.channel)
+            .await
+            .map_err(AppError::bad_request)?;
+        let target = self
+            .targets
+            .must_active(&request.target)
+            .await
+            .map_err(AppError::bad_request)?;
+        let url = target
+            .teams_webhook_url()
+            .or_else(|| channel.teams_webhook_url().ok())
+            .ok_or_else(|| {
+                AppError::bad_request(format!(
+                    "Teams webhook url missing on target `{}` and channel `{}`",
+                    request.target, request.channel
+                ))
+            })?;
 
-impl MSService {
-    pub fn new(http: Arc<HttpClient>) -> Self {
-        return Self { http };
+        let raw = request
+            .message
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| AppError::bad_request("rendered Teams card is empty"))?;
+        let card: Value = serde_json::from_str(raw)
+            .map_err(|_| AppError::bad_request("rendered Teams template is not valid JSON"))?;
+        self.http
+            .post_json(&url, &HashMap::new(), &wrap_teams_message(card))
+            .await
+            .map_err(|err| AppError::internal(err.to_string()))?;
+        Ok(())
     }
 }

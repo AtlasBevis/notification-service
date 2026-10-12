@@ -79,10 +79,7 @@ impl NotificationService {
         target_code: &str,
         template_id: i64,
     ) -> AppResult<()> {
-        self.sources
-            .must_active(source_code)
-            .await
-            .map_err(AppError::bad_request)?;
+        self.sources.get_active_by_code(source_code).await?;
         self.channels
             .must_active(channel_code)
             .await

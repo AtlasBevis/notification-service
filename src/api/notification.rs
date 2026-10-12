@@ -2,7 +2,6 @@ use crate::models::{
     ApiRequest, ApiResponse, CreateNotificationRequest, NotificationData, PageData,
     UpdateNotificationRequest,
 };
-use crate::services::NotificationTrait;
 use crate::state::SharedState;
 use axum::extract::{Path, State};
 

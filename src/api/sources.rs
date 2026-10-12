@@ -1,7 +1,6 @@
 use crate::models::{
     ApiRequest, ApiResponse, CreateSourceRequest, PatchMetadataRequest, SourceData,
 };
-use crate::services::SourceTrait;
 use crate::state::SharedState;
 use axum::extract::{Path, State};
 
@@ -15,8 +14,7 @@ pub async fn get_source(
     }
 
     match state.sources_service.get_by_code(&key).await {
-        Ok(Some(data)) => ApiResponse::success(data),
-        Ok(None) => ApiResponse::not_found(format!("source `{key}` not found")),
+        Ok(data) => ApiResponse::success(data),
         Err(err) => err.to_response(),
     }
 }

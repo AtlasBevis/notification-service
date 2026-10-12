@@ -3,12 +3,9 @@ use chrono::Utc;
 use deadpool_postgres::Pool;
 use serde_json::Value;
 
-use crate::{
-    enums::Status,
-    models::{CreateSourceRequest, SourceData},
-};
-
-use crate::error::AppError;
+use crate::enums::Status;
+use crate::error::{AppError, AppResult};
+use crate::models::{CreateSourceRequest, SourceData};
 
 #[derive(Clone)]
 pub struct SourceRepository {
@@ -33,7 +30,7 @@ impl SourceRepository {
         Ok(rows.iter().map(SourceData::map_row).collect())
     }
 
-    pub async fn find_by_code(&self, code: &str) -> Result<Option<SourceData>, AppError> {
+    pub async fn find_by_code(&self, code: &str) -> AppResult<SourceData> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
@@ -43,10 +40,13 @@ impl SourceRepository {
                 &[&code],
             )
             .await?;
-        Ok(row.map(|r| SourceData::map_row(&r)))
+        match row {
+            Some(r) => Ok(SourceData::map_row(&r)),
+            None => Err(AppError::NotFound(format!("source `{code}` not found"))),
+        }
     }
 
-    pub async fn find_by_id(&self, id: i32) -> Result<Option<SourceData>, AppError> {
+    pub async fn find_by_id(&self, id: i32) -> AppResult<SourceData> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
@@ -56,7 +56,10 @@ impl SourceRepository {
                 &[&id],
             )
             .await?;
-        Ok(row.map(|r| SourceData::map_row(&r)))
+        match row {
+            Some(r) => Ok(SourceData::map_row(&r)),
+            None => Err(AppError::NotFound(format!("source id `{id}` not found"))),
+        }
     }
 
     pub async fn insert(&self, req: &CreateSourceRequest) -> Result<SourceData, AppError> {

@@ -17,7 +17,7 @@ futures = { version = "0.3", features = ["executor", "thread-pool"] }
 chrono = { version = "0.4", features = ["serde"] }
 rskafka = "0.6"
 http-body-util = "0.1"
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "form", "rustls"] }
 async-trait = "0.1"
 base64 = "0.22"
 metrics = "0.24.6"

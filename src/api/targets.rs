@@ -1,7 +1,6 @@
 use crate::models::{
     ApiRequest, ApiResponse, CreateTargetRequest, PatchMetadataRequest, TargetData,
 };
-use crate::services::TargetTrait;
 use crate::state::SharedState;
 use axum::extract::{Path, State};
 

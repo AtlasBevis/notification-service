@@ -37,7 +37,6 @@ pub struct NotifyValue {
     pub kind: String,
     pub title: Option<String>,
     pub message: Option<String>,
-    pub payload: Value,
     pub recipients: Recipients,
 }
 
@@ -63,7 +62,6 @@ impl NotifyMessage {
                 kind: "INFO".to_string(),
                 title: None,
                 message: None,
-                payload: Value::Object(req.variables.clone()),
                 recipients: Recipients::default(),
             },
         }

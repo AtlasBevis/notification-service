@@ -12,8 +12,8 @@ use crate::repository::SourceRepository;
 pub trait SourceTrait: Send + Sync {
     async fn load(&self) -> anyhow::Result<()>;
     async fn get(&self, code: &str) -> Option<SourceData>;
-    async fn get_by_code(&self, code: &str) -> AppResult<Option<SourceData>>;
-    async fn must_active(&self, code: &str) -> Result<SourceData, String>;
+    async fn get_by_code(&self, code: &str) -> AppResult<SourceData>;
+    async fn get_active_by_code(&self, code: &str) -> AppResult<SourceData>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<SourceData>;
     async fn create(&self, req: CreateSourceRequest) -> AppResult<()>;
     async fn patch_metadata(&self, req: PatchMetadataRequest) -> AppResult<()>;
@@ -53,17 +53,17 @@ impl SourceTrait for SourceService {
         self.cache.read().await.get(&key).cloned()
     }
 
-    async fn get_by_code(&self, code: &str) -> AppResult<Option<SourceData>> {
-        if let Some(s) = self.get(code).await {
-            return Ok(Some(s));
+    async fn get_by_code(&self, code: &str) -> AppResult<SourceData> {
+        let key = code.trim().to_ascii_uppercase();
+        if let Some(s) = self.get(&key).await {
+            return Ok(s);
         }
 
-        match self.repo.find_by_code(code).await {
-            Ok(Some(s)) => {
-                self.cache.write().await.insert(code.to_owned(), s.clone());
-                Ok(Some(s))
+        match self.repo.find_by_code(&key).await {
+            Ok(s) => {
+                self.cache.write().await.insert(key, s.clone());
+                Ok(s)
             }
-            Ok(None) => Ok(None),
             Err(err) => {
                 tracing::error!(error = %err, code, "find source by code failed");
                 Err(err)
@@ -71,28 +71,24 @@ impl SourceTrait for SourceService {
         }
     }
 
-    async fn get_active_by_id(&self, id: i32) -> AppResult<SourceData> {
-        match self.repo.find_by_id(id).await {
-            Ok(Some(s)) => {
-                self.cache.write().await.insert(s.code.clone(), s.clone());
-                active_source(s, id).map_err(AppError::bad_request)
-            }
-            Ok(None) => Err(AppError::not_found(format!("unknown source id `{id}`"))),
-            Err(err) => {
-                tracing::error!(error = %err, id, "load source failed");
-                Err(err)
-            }
+    async fn get_active_by_code(&self, code: &str) -> AppResult<SourceData> {
+        let s = self.get_by_code(code).await?;
+        if Status::Active.as_str() != s.status {
+            return Err(AppError::bad_request(format!(
+                "source `{code}` is not ACTIVE",
+            )));
         }
+        Ok(s)
     }
 
-    async fn must_active(&self, code: &str) -> Result<SourceData, String> {
-        let source = self
-            .get_by_code(code)
-            .await
-            .map_err(|err| err.to_string())?
-            .ok_or_else(|| format!("unknown source `{code}`"))?;
-        let id = source.id;
-        active_source(source, id)
+    async fn get_active_by_id(&self, id: i32) -> AppResult<SourceData> {
+        let s = self.repo.find_by_id(id).await?;
+        if Status::Active.as_str() != s.status {
+            return Err(AppError::bad_request(format!(
+                "source `{id}` is not ACTIVE",
+            )));
+        }
+        Ok(s)
     }
 
     async fn create(&self, req: CreateSourceRequest) -> AppResult<()> {
@@ -127,13 +123,5 @@ impl SourceTrait for SourceService {
                 Err(err)
             }
         }
-    }
-}
-
-fn active_source(s: SourceData, id: i32) -> Result<SourceData, String> {
-    if s.status.eq_ignore_ascii_case(Status::Active.as_str()) {
-        Ok(s)
-    } else {
-        Err(format!("source id `{id}` is not ACTIVE"))
     }
 }

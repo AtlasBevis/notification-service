@@ -28,4 +28,4 @@ pub use page::PageData;
 pub use source::{CreateSourceRequest, PatchMetadataRequest, SourceData};
 pub use target::{CreateTargetRequest, Recipients, TargetData};
 pub use template::{CreateTemplateRequest, TemplateData};
-pub use webhook::{WebhookConfig, WebhookPayload};
+pub use webhook::{TokenBodyFormat, WebhookAuthConfig, WebhookConfig, WebhookPayload};
