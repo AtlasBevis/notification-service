@@ -1,6 +1,8 @@
 -- templates is the stable identity a definition points at (definitions.template_id).
 -- template_versions holds the renderable content; a send uses the latest ACTIVE version.
--- format: TEXT / HTML for EMAIL, ADAPTIVE_CARD for MSTEAMS.
+-- format: TEXT / HTML for EMAIL, ADAPTIVE_CARD for MSTEAMS, JSON for WEBHOOK
+-- (content is the request body object; {{variable}} placeholders are filled from
+-- the notify request's variables).
 --
 -- version used when sending:
 -- SELECT v.id, v.version, v.title, v.content, v.format
@@ -29,8 +31,8 @@ CREATE TABLE template_versions (
   status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
 
   title             TEXT         NOT NULL, -- email subject / card title template
-  content           TEXT         NOT NULL, -- body / Adaptive Card JSON template
-  format            VARCHAR(30)  NOT NULL DEFAULT 'TEXT', -- TEXT / HTML / ADAPTIVE_CARD
+  content           TEXT         NOT NULL, -- body / Adaptive Card JSON / webhook body template
+  format            VARCHAR(30)  NOT NULL DEFAULT 'TEXT', -- TEXT / HTML / ADAPTIVE_CARD / JSON
 
   CONSTRAINT uq_template_versions_template_version UNIQUE (template_id, version)
 );

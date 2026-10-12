@@ -3,7 +3,7 @@ use serde_json::{Map, Value};
 
 use crate::{
     enums::{Channel, Level},
-    models::{ChannelData, DefinitionData, DefinitionTarget, NotifyRequest, Recipients},
+    models::{ChannelData, DefinitionData, NotifyRequest, Recipients},
 };
 
 pub const EVENT_TYPE_SEND: &str = "notification.send";
@@ -40,12 +40,19 @@ pub struct NotifyValue {
     pub target: String,
     pub target_ids: Vec<i32>,
     #[serde(default)]
-    pub target_payloads: Vec<DefinitionTarget>,
+    pub target_payloads: Vec<TargetPayload>,
     pub template: String,
 
     pub title: Option<String>,
     pub message: Option<String>,
     pub recipients: Recipients,
+}
+
+/// Webhook body template resolved for one target when the send was accepted.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TargetPayload {
+    pub target_id: i32,
+    pub payload: Value,
 }
 
 impl NotifyMessage {
@@ -103,8 +110,8 @@ impl NotifyMessage {
         self
     }
 
-    pub fn with_target_payloads(mut self, targets: &[DefinitionTarget]) -> Self {
-        self.value.target_payloads = targets.to_vec();
+    pub fn with_target_payloads(mut self, payloads: Vec<TargetPayload>) -> Self {
+        self.value.target_payloads = payloads;
         self
     }
 

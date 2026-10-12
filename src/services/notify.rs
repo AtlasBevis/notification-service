@@ -4,7 +4,7 @@ use crate::error::{AppError, AppResult};
 use crate::infras::kafka::KafkaBus;
 use crate::models::{
     DefinitionData, DeliveryDraft, NotifyMessage, NotifyRequest, NotifyValue, TargetData,
-    EVENT_TYPE_SEND,
+    TargetPayload, TemplateData, EVENT_TYPE_SEND,
 };
 use crate::services::{
     ChannelTrait, DefinitionTrait, DeliveryTrait, EmailTrait, MSTrait, NotificationTrait,
@@ -12,6 +12,7 @@ use crate::services::{
 };
 use async_trait::async_trait;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -261,10 +262,51 @@ impl NotifyService {
         targets: &[TargetData],
     ) -> AppResult<NotifyMessage> {
         let channel_code = channel.code.as_str();
-        let template_id = definition.template_id.ok_or_else(|| {
+        let is_webhook = channel.code == Channel::WEBHOOK;
+
+        // Each target uses its own template when set, otherwise the definition's.
+        let mut resolved: HashMap<i32, TemplateData> = HashMap::new();
+        let mut target_payloads = Vec::new();
+        let mut first_template_id = definition.template_id;
+        if is_webhook {
+            for target in &definition.targets {
+                let template_id =
+                    target
+                        .template_id
+                        .or(definition.template_id)
+                        .ok_or_else(|| {
+                            AppError::bad_request(format!(
+                                "definition `{}` target `{}` has no template",
+                                definition.code, target.target_id
+                            ))
+                        })?;
+                if !resolved.contains_key(&template_id) {
+                    let template = self.templates.get_active_by_id(template_id).await?;
+                    resolved.insert(template_id, template);
+                }
+                target_payloads.push(TargetPayload {
+                    target_id: target.target_id,
+                    payload: resolved[&template_id].json_payload()?,
+                });
+                first_template_id.get_or_insert(template_id);
+            }
+        }
+
+        // Title and body recorded on the delivery come from the definition's
+        // template, or the first target's when a WEBHOOK definition has none.
+        let template_id = first_template_id.ok_or_else(|| {
             AppError::bad_request(format!("definition `{}` has no template", definition.code))
         })?;
-        let template = self.templates.get_active_by_id(template_id).await?;
+        let template = match resolved.remove(&template_id) {
+            Some(template) => template,
+            None => self.templates.get_active_by_id(template_id).await?,
+        };
+        if template.is_json() != is_webhook {
+            return Err(AppError::bad_request(format!(
+                "template `{}` format `{}` is not valid for channel `{channel_code}`",
+                template.name, template.format
+            )));
+        }
 
         let mut recipients = crate::models::Recipients::default();
         for target in targets {
@@ -291,7 +333,7 @@ impl NotifyService {
             .with_channel(channel)
             .map_err(AppError::bad_request)?
             .with_targets(targets)
-            .with_target_payloads(&definition.targets)
+            .with_target_payloads(target_payloads)
             .with_template(template.name)
             .with_recipients(recipients)
             .with_rendered(title, message))

@@ -399,14 +399,6 @@ impl WebhookServiceTrait for WebhookService {
                 definition.code
             )));
         }
-        for target in &definition.targets {
-            if !target.payload.is_object() {
-                return Err(AppError::bad_request(format!(
-                    "payload for definition target `{}` must be a JSON object",
-                    target.target_id
-                )));
-            }
-        }
         for config in configs {
             Self::validate_endpoint(&config.endpoint_url)?;
             Self::request_method(config.http_method)?;

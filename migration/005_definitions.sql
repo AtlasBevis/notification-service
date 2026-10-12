@@ -18,13 +18,14 @@ CREATE TABLE definitions (
 );
 
 -- A definition may deliver to multiple destination groups on its channel.
--- payload is the per-target webhook body template; {{variable}} placeholders
--- are populated from the incoming notification variables at dispatch time.
+-- template_id overrides definitions.template_id for that target; NULL uses the
+-- definition's template. WEBHOOK targets use it to send a different request body
+-- (a format = 'JSON' template) per target.
 CREATE TABLE definition_targets (
   id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   definition_id       BIGINT NOT NULL REFERENCES definitions (id) ON DELETE CASCADE,
   target_id           INT NOT NULL REFERENCES targets (id) ON DELETE RESTRICT,
-  payload             JSONB NOT NULL DEFAULT '{}'::jsonb,
+  template_id         INT REFERENCES templates (id),
   created_at          timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_definition_targets_definition_id ON definition_targets (definition_id);

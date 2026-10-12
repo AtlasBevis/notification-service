@@ -6,6 +6,10 @@ use std::collections::HashMap;
 use crate::enums::Status;
 use crate::error::{AppError, AppResult};
 
+pub const FORMAT_ADAPTIVE_CARD: &str = "ADAPTIVE_CARD";
+/// Webhook request body; `content` must be a JSON object.
+pub const FORMAT_JSON: &str = "JSON";
+
 /// A template joined with the version selected for it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateData {
@@ -47,18 +51,47 @@ impl TemplateData {
         })
     }
 
+    pub fn is_json(&self) -> bool {
+        self.format.eq_ignore_ascii_case(FORMAT_JSON)
+    }
+
+    /// Unrendered webhook body of a `JSON` template.
+    pub fn json_payload(&self) -> AppResult<Value> {
+        if !self.is_json() {
+            return Err(AppError::bad_request(format!(
+                "template `{}` format `{}` cannot be used as a webhook body; expected `{FORMAT_JSON}`",
+                self.name, self.format
+            )));
+        }
+        parse_json_object(&self.content).map_err(|msg| {
+            AppError::bad_request(format!(
+                "template `{}` version {}: {msg}",
+                self.name, self.version
+            ))
+        })
+    }
+
     /// Render templates with
     /// `title` and `content` with `{{key}}` from `variables`.
     pub fn merge_template(&self, variables: &Map<String, Value>) -> (String, String) {
         let mut vars = HashMap::new();
         flatten_variables(variables, &mut vars);
 
-        let escape_json = self.format.eq_ignore_ascii_case("ADAPTIVE_CARD");
+        let escape_json = self.format.eq_ignore_ascii_case(FORMAT_ADAPTIVE_CARD) || self.is_json();
 
         let title = truncate_chars(&render_placeholders(&self.title, &vars, false), 255);
         vars.insert("title".to_string(), title.clone());
         let content = render_placeholders(&self.content, &vars, escape_json);
         (title, content)
+    }
+}
+
+fn parse_json_object(content: &str) -> Result<Value, String> {
+    match serde_json::from_str::<Value>(content) {
+        Ok(value) if value.is_object() => Ok(value),
+        _ => Err(format!(
+            "content must be a JSON object for format `{FORMAT_JSON}`"
+        )),
     }
 }
 
@@ -187,6 +220,9 @@ impl CreateTemplateRequest {
         }
         if self.content.trim().is_empty() {
             return Err("content must not be empty".to_string());
+        }
+        if self.format.trim().eq_ignore_ascii_case(FORMAT_JSON) {
+            parse_json_object(&self.content)?;
         }
         Ok(())
     }
