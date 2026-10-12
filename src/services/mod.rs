@@ -14,7 +14,6 @@ pub use definition::{DefinitionService, DefinitionTrait};
 pub use email::{EmailService, EmailTrait};
 pub use ms::{MSService, MSTrait};
 pub use notification::NotificationService;
-pub use notification::NotificationTrait;
 pub use notify::NotifyService;
 pub use notify::NotifyTrait;
 pub use source::{SourceService, SourceTrait};

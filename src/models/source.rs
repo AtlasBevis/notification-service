@@ -9,7 +9,7 @@ pub struct SourceData {
     pub name: String,
     pub status: String,
     pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
     pub metadata: Value,
 }
 
@@ -22,7 +22,7 @@ impl SourceData {
             status: row.get("status"),
             metadata: row.get("metadata"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
-            updated_at: row.get::<_, DateTime<Utc>>("updated_at"),
+            updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::api::{health, notification, notify, sources, targets, templates};
+use crate::api::{health, notify, sources, targets, templates};
 use crate::middlewares::{auth_middleware, http_metrics_middleware, logging_middleware};
 use crate::state::SharedState;
 use axum::routing::patch;
@@ -29,20 +29,10 @@ pub fn app_routes(state: SharedState) -> Router {
         .route("/", post(targets::create_target));
 
     let notification = Router::new()
-        .route(
-            "/",
-            post(notification::create_notification).get(notification::list_notifications),
-        )
         .route("/notify", post(notify::notify))
         .nest(TEMPLATES_API, templates)
         .nest(SOURCES_API, sources_routes)
-        .nest(TARGETS_API, targets_routes)
-        .route(
-            "/{code}",
-            get(notification::get_notification)
-                .put(notification::update_notification)
-                .delete(notification::delete_notification),
-        );
+        .nest(TARGETS_API, targets_routes);
 
     let protected = Router::new()
         .nest(PATH_BASE, notification)

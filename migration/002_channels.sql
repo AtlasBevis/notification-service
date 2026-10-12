@@ -7,7 +7,7 @@ CREATE TABLE channels (
   id                INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   code              VARCHAR(50)  NOT NULL UNIQUE,
   created_at        timestamptz  NOT NULL DEFAULT now(),
-  updated_at        timestamptz  NOT NULL,
+  updated_at        timestamptz,
 
   name              VARCHAR(255) NOT NULL,
   status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
@@ -15,7 +15,8 @@ CREATE TABLE channels (
 );
 
 -- data
-INSERT INTO channels (code, name, metadata, updated_at) VALUES
-  ('EMAIL',    'Email',            '{"host": "", "username": "", "password": ""}'::jsonb, now()),
-  ('MSTEAMS',  'Microsoft Teams',  '{}'::jsonb, now()),
-  ('WEBHOOK',  'HTTP webhook',     '{"timeout_ms": 5000}'::jsonb, now());
+INSERT INTO channels (code, name) VALUES
+  ('EMAIL',    'Email'          ),
+  ('MSTEAMS',  'Microsoft Teams'),
+  ('WEBHOOK',  'HTTP Webhook')
+;

@@ -20,7 +20,7 @@ pub struct ChannelData {
     pub status: String,
     pub metadata: Value,
     pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 impl ChannelData {
@@ -32,7 +32,7 @@ impl ChannelData {
             status: row.get("status"),
             metadata: row.get("metadata"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
-            updated_at: row.get::<_, DateTime<Utc>>("updated_at"),
+            updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
         }
     }
 

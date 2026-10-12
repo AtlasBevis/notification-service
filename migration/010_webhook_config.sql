@@ -9,7 +9,5 @@ CREATE TABLE webhook_configs (
   max_retries       INT             NOT NULL DEFAULT 3,
   
   created_at        timestamptz     NOT NULL DEFAULT now(),
-  updated_at        timestamptz     NOT NULL DEFAULT now(),
-
-  CONSTRAINT uq_webhook_configs_channel UNIQUE (channel_id)
+  updated_at        timestamptz
 );

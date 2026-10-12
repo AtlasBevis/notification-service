@@ -1,10 +1,10 @@
--- Who may emit a notification. Caller's service must match notifications.source_code.
+-- Source emits notifications
 
 CREATE TABLE sources (
   id                INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   code              VARCHAR(50)  NOT NULL UNIQUE,
   created_at        timestamptz  NOT NULL DEFAULT now(),
-  updated_at        timestamptz  NOT NULL,
+  updated_at        timestamptz,
 
   name              VARCHAR(255) NOT NULL,
   status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
@@ -12,7 +12,7 @@ CREATE TABLE sources (
 );
 
 -- data
-INSERT INTO sources (code, name, updated_at) VALUES
-  ('SPARK_AIRFLOW',   'SPARK Airflow', now()),
-  ('GITLAB_RUNNER',  'GitLab Runner', now())
+INSERT INTO sources (code, name) VALUES
+  ('SPARK_AIRFLOW',   'Spark Airflow'),
+  ('GITLAB_RUNNER',  'GitLab Runner')
 ;

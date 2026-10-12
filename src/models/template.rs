@@ -13,7 +13,7 @@ pub struct TemplateData {
     pub format: String,
     pub version: i32,
     pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 impl TemplateData {
@@ -27,7 +27,7 @@ impl TemplateData {
             format: row.get("format"),
             version: row.get("version"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
-            updated_at: row.get::<_, DateTime<Utc>>("updated_at"),
+            updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
         }
     }
 

@@ -57,7 +57,6 @@ impl NotificationsRepository {
         let now = Utc::now();
         let template_id = i32::try_from(req.template_id)
             .map_err(|_| AppError::bad_request("template_id is out of range"))?;
-
         client
             .execute(
                 "INSERT INTO definitions (
@@ -96,19 +95,14 @@ impl NotificationsRepository {
         let now = Utc::now();
         let template_id = i32::try_from(req.template_id)
             .map_err(|_| AppError::bad_request("template_id is out of range"))?;
-
         let changed = client
             .execute(
                 "UPDATE definitions
-                 SET name = $2,
-                     status = $3,
-                     description = $4,
+                 SET name = $2, status = $3, description = $4,
                      source_id = (SELECT id FROM sources WHERE code = $5),
                      channel_id = (SELECT id FROM channels WHERE code = $6),
                      target_id = (SELECT id FROM targets WHERE code = $7),
-                     template_id = $8,
-                     level = $9,
-                     updated_at = $10
+                     template_id = $8, level = $9, updated_at = $10
                  WHERE code = $1",
                 &[
                     &code,
@@ -125,31 +119,29 @@ impl NotificationsRepository {
             )
             .await?;
         if changed == 0 {
-            return Err(AppError::not_found("not found"));
+            return Err(AppError::not_found(format!("notification `{code}` not found")));
         }
         self.find_by_code(code).await
     }
 
     pub async fn delete(&self, code: &str) -> Result<(), AppError> {
         let client = self.pool.get().await?;
-        let n = match client
+        let deleted = match client
             .execute("DELETE FROM definitions WHERE code = $1", &[&code])
             .await
         {
-            Ok(n) => n,
+            Ok(count) => count,
             Err(err) => {
-                if let Some(db) = err.as_db_error() {
-                    if db.code() == &SqlState::FOREIGN_KEY_VIOLATION {
-                        return Err(AppError::conflict(
-                            "definition is referenced by notifications",
-                        ));
-                    }
+                if err.as_db_error().is_some_and(|db| db.code() == &SqlState::FOREIGN_KEY_VIOLATION) {
+                    return Err(AppError::conflict(
+                        "definition is referenced by notifications",
+                    ));
                 }
                 return Err(err.into());
             }
         };
-        if n == 0 {
-            return Err(AppError::not_found("not found"));
+        if deleted == 0 {
+            return Err(AppError::not_found(format!("notification `{code}` not found")));
         }
         Ok(())
     }

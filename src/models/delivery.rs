@@ -15,7 +15,7 @@ pub struct DeliveryData {
     pub destination: Value,
     pub attempt_count: i32,
     pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 impl DeliveryData {
@@ -32,7 +32,7 @@ impl DeliveryData {
             destination: row.get("destination"),
             attempt_count: row.get("attempt_count"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
-            updated_at: row.get::<_, DateTime<Utc>>("updated_at"),
+            updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
         }
     }
 }

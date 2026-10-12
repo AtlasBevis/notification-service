@@ -60,13 +60,7 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
         .await
         .context("Failed to load targets")?;
 
-    let notification_service = Arc::new(NotificationService::new(
-        notifications_repo,
-        sources_service.clone(),
-        targets_service.clone(),
-        channels_service.clone(),
-        templates_service.clone(),
-    ));
+    let notification_service = Arc::new(NotificationService::new(notifications_repo));
     let notify_service = Arc::new(NotifyService::new(
         infras.kafka.clone(),
         definitions_service,
@@ -82,7 +76,6 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
     ));
 
     Ok(Arc::new(AppState {
-        notification_service,
         notify_service,
         sources_service,
         targets_service,
@@ -119,13 +112,9 @@ pub async fn build_notification_consumer(config: &Config) -> Result<Arc<NotifySe
         .await
         .context("Failed to load targets")?;
 
-    let notification_service = Arc::new(NotificationService::new(
-        NotificationsRepository::new(pool.clone()),
-        sources_service.clone(),
-        targets_service.clone(),
-        channels_service.clone(),
-        templates_service.clone(),
-    ));
+    let notification_service = Arc::new(NotificationService::new(NotificationsRepository::new(
+        pool.clone(),
+    )));
     let webhook_service = Arc::new(WebhookService::new(
         reqwest::Client::builder()
             .build()

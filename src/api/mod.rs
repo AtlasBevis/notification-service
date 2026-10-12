@@ -1,7 +1,6 @@
-pub mod health;
-pub mod notification;
-pub mod notify;
+mod health;
+mod notify;
 pub mod routes;
-pub mod sources;
-pub mod targets;
-pub mod templates;
+mod sources;
+mod targets;
+mod templates;

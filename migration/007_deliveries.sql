@@ -5,7 +5,7 @@
 CREATE TABLE deliveries (
   id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   created_at        timestamptz  NOT NULL DEFAULT now(),
-  updated_at        timestamptz  NOT NULL,
+  updated_at        timestamptz,
 
   notification_id   BIGINT       NOT NULL REFERENCES notifications (id),
   target_code       VARCHAR(50)  NOT NULL,
