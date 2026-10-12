@@ -13,7 +13,7 @@ CREATE TABLE definitions (
   level             VARCHAR(20)  NOT NULL DEFAULT 'INFO',
   
   source_id         INT   NOT NULL REFERENCES sources (id),
-  channel_id        INT   NOT NULL REFERENCES channels (id)
-  -- target_id         INT   REFERENCES targets (id),
-  -- template_id       INT   REFERENCES templates (id)
+  channel_id        INT   NOT NULL REFERENCES channels (id),
+  target_id         INT   NOT NULL REFERENCES targets (id),
+  template_id       INT   NOT NULL REFERENCES templates (id)
 );

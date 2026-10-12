@@ -1,5 +1,4 @@
 use serde_json::Value;
-use uuid::Uuid;
 
 /// Runtime row in `notifications`, created when a caller triggers a definition.
 #[derive(Debug, Clone)]

@@ -1,62 +1,42 @@
-# Flow Notification
+# Database setup and notification flow
 
-`notification_definitions` là catalog mã thông báo. `notifications` là một request đã nhận. `deliveries` là một lần gửi tới một route. Retry ghi `delivery_attempts` trên cùng delivery.
+`definitions` stores the send configuration. `notifications` and `deliveries` are runtime rows created internally by `POST /notification/notify`; the API does not expose notification CRUD.
 
-Chi tiết request: [`docs/api_flow.md`](../docs/api_flow.md).
+## Migration order
 
-## Bảng
+Apply migrations in numerical order to an empty database:
 
-Áp dụng trên database trống, theo thứ tự file.
-
-| File | Bảng | Vai trò |
-|------|------|---------|
-| `001_sources.sql` | `sources` | Ai được gọi API |
-| `002_channels.sql` | `channels` | `EMAIL`, `MSTEAMS`, `WEBHOOK` |
-| `003_targets.sql` | `targets` | Đích có tên, một `channel_code` |
-| `004_templates.sql` | `templates` | Nội dung, version trên cùng bảng |
-| `005_notification_definitions.sql` | `notification_definitions` | Mã sự kiện: `code`, `source_code`, `level` |
-| `006_notification_routes.sql` | `notification_routes` | Fan-out của một definition |
-| `007_notifications.sql` | `notifications` | Request: `definition_id`, `idempotency_key`, `variables` |
-| `008_deliveries.sql` | `deliveries` | Một route của request, payload đã render |
-| `009_delivery_attempts.sql` | `delivery_attempts` | Từng lần gửi |
-
-```bash
-psql -U notification -d notification -f migration/001_sources.sql
-psql -U notification -d notification -f migration/002_channels.sql
-psql -U notification -d notification -f migration/003_targets.sql
-psql -U notification -d notification -f migration/004_templates.sql
-psql -U notification -d notification -f migration/005_notification_definitions.sql
-psql -U notification -d notification -f migration/006_notification_routes.sql
-psql -U notification -d notification -f migration/007_notifications.sql
-psql -U notification -d notification -f migration/008_deliveries.sql
-psql -U notification -d notification -f migration/009_delivery_attempts.sql
+```powershell
+Get-ChildItem migration\*.sql | Sort-Object Name | ForEach-Object {
+    psql -U notification -d notification -f $_.FullName
+}
 ```
 
-## Vòng đời
+| File | Tables / purpose |
+|---|---|
+| `001_sources.sql` | Sources allowed to call the service |
+| `002_channels.sql` | Delivery channel catalog |
+| `003_targets.sql` | Destinations attached to channels |
+| `004_templates.sql` | Versioned message templates |
+| `005_definitions.sql` | `code` to source/channel/target/template mapping |
+| `006_notifications.sql` | Accepted request and trace ID uniqueness |
+| `007_deliveries.sql` | Rendered message and current delivery state |
+| `008_delivery_attempts.sql` | Dispatch attempt history |
+| `009_webhook_auth_configs.sql` | Webhook authentication configuration |
+| `010_webhook_config.sql` | Webhook endpoint, method, timeout, and retries |
+
+After the migrations, add each notification definition directly to `definitions` and associate it with existing source, channel, target, and template rows. Configure webhook channels in `webhook_configs` as needed.
+
+## Runtime lifecycle
 
 ```text
 POST /notification/notify
-        |
-        | load notification_definitions by code
-        | load ACTIVE notification_routes
-        | one transaction
-        v
-notifications                         deliveries
-  definition_id                            |
-  source_code + code                       v
-  idempotency_key = trace_id          PENDING
-  variables                                |
-                                           v
-                                      SENT | FAILED
-                                           |
-                                           +---- delivery_attempts
+  -> resolve active definition and configuration
+  -> render the selected template
+  -> transactionally insert notifications + deliveries
+  -> return 202 Accepted
+  -> dispatch through Kafka consumer, or directly when Kafka is disabled
+  -> update delivery state and append delivery_attempts
 ```
 
-Unique:
-
-- `notification_definitions (code)`
-- `notifications (source_code, idempotency_key)`
-- `deliveries (notification_id, route_id)`
-- `delivery_attempts (delivery_id, attempt_no)`
-
-Gọi lại cùng `(source_code, idempotency_key)` trả **409**. Không tạo delivery mới.
+The unique `(source, trace_id)` constraint prevents duplicate accepted requests. Delivery retries update the existing delivery and append attempt rows; they do not create another notification or delivery.

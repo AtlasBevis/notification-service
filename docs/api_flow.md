@@ -1,18 +1,24 @@
-# Data Notification — Request Flow
+# Notification API flow
 
-Caller gửi `code`. Destination nằm trên `definitions`, không nằm trong request.
+`/notification` exposes the send operation only. The caller does not create, list, read, update, or delete notification records through HTTP. A notification and its delivery are written internally when a valid send request is accepted.
 
-| Bảng | Vai trò |
-|------|---------|
-| `sources` | Service được phép phát notification |
-| `channels` | Cách vận chuyển: `EMAIL`, `MSTEAMS`, `WEBHOOK` |
-| `targets` | Đích nhận, gắn với một `channel_id` |
-| `templates` | Title và body, render bằng `{{key}}` |
-| `webhook_configs` | Endpoint, method, timeout và `max_retries` của channel `WEBHOOK` |
-| `definitions` | Một `code` trỏ tới source, channel, target và template |
-| `notifications` | Một lần caller gọi API. Không lưu trạng thái gửi |
-| `deliveries` | Bản render của lần gọi đó |
-| `delivery_attempts` | Từng lần gọi kênh, kể cả retry |
+## Configuration and runtime data
+
+| Table | Purpose |
+|---|---|
+| `sources` | Services allowed to send notifications |
+| `channels` | Delivery types: `EMAIL`, `MSTEAMS`, `WEBHOOK` |
+| `targets` | Destination data associated with a channel |
+| `templates` | Message title and body, rendered with `{{key}}` |
+| `webhook_configs` | Webhook endpoint, method, timeout, and retry policy |
+| `definitions` | Maps a caller `code` to its source, channel, target, and template |
+| `notifications` | Runtime record for an accepted send request |
+| `deliveries` | Rendered message and delivery status |
+| `delivery_attempts` | Individual dispatch attempts |
+
+The service has no `/notification` CRUD endpoint for `definitions`; definitions are provisioned in the database. Source, target, and template configuration endpoints remain available under `/notification/sources`, `/notification/targets`, and `/notification/templates`.
+
+## Send sequence
 
 ```mermaid
 sequenceDiagram
@@ -23,25 +29,25 @@ sequenceDiagram
     participant Channel as EMAIL / MSTEAMS / WEBHOOK
 
     Client->>API: POST /notification/notify
-    API->>API: api-key
-    API->>DB: definitions, sources, channels, targets, templates
-    API->>API: render template
-    API->>DB: INSERT notifications + deliveries
+    API->>API: Validate api-key and request
+    API->>DB: Load definition and active source/channel/target/template
+    API->>API: Render title, body, payload
+    API->>DB: Transaction: insert notification + delivery
     API-->>Client: 202 Accepted
-    alt Kafka on
-        API->>Worker: notification.send
-        Worker->>DB: webhook_configs when channel is WEBHOOK
-        Worker->>Channel: one HTTP, SMTP, or Teams call
-        Worker->>DB: delivery_attempts and deliveries
-    else Kafka off
-        API->>Channel: dispatch immediately
-        API->>DB: delivery_attempts and deliveries
+    alt Kafka enabled
+        API->>Worker: Publish notification.send
+        Worker->>DB: Load webhook retry policy when needed
+        Worker->>Channel: Dispatch and retry
+        Worker->>DB: Record attempts and delivery result
+    else Kafka disabled
+        API->>Channel: Dispatch directly
+        API->>DB: Record dispatch result
     end
 ```
 
 ## Request
 
-`POST /notification/notify` với header `api-key`.
+`POST /notification/notify` with the `api-key` header:
 
 ```json
 {
@@ -54,34 +60,32 @@ sequenceDiagram
 }
 ```
 
-`source`, channel, target và template được lấy từ `definitions` theo `code`. `trace_id` là `notifications.idempotency_key`. Cùng `(source_code, trace_id)` lần nữa trả **409**.
+`code` resolves the preconfigured definition. `trace_id` is the caller's idempotency key. A repeated `(source, trace_id)` is rejected with **409 Conflict**. On acceptance, the API stores the notification and one delivery in the same transaction and returns **202 Accepted**.
 
-API render template, rồi ghi `notifications` và một `deliveries` trong cùng transaction. Response là **202 Accepted**.
+## Delivery status
 
-## Webhook
+`notifications` records the accepted request and has no delivery status. Status is stored on `deliveries`; each dispatch attempt is stored in `delivery_attempts`.
 
-`WebhookService` chỉ thực hiện một lần gửi HTTP:
+| Outcome | `deliveries.status` | Attempt result |
+|---|---|---|
+| Channel accepted | `SENT` | `SUCCESS` |
+| Another retry will run | `RETRY_WAIT` | `FAILED` or `TIMEOUT` |
+| Retries exhausted | `FAILED` | `FAILED` or `TIMEOUT` |
 
-- Method lấy từ `webhook_configs.method`: `POST`, `PUT`, `PATCH`.
-- Timeout lấy từ `webhook_configs.timeout_seconds`.
-- Body là JSON payload đã render.
-- HTTP 2xx là thành công. HTTP 4xx, 5xx, timeout và lỗi kết nối trả `AppError`.
+Webhook method, timeout, and retry policy come from `webhook_configs`. Kafka enabled means the API publishes for asynchronous dispatch; otherwise the API dispatches directly.
 
-Worker đọc `max_retries`, ghi mỗi lần gọi vào `delivery_attempts`, rồi cập nhật `deliveries`. Timeout được ghi `TIMEOUT`; lỗi HTTP hoặc kết nối được ghi `FAILED`.
+## Routes
 
-## Trạng thái delivery
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Public health check |
+| `POST` | `/notification/notify` | Validate, accept, and dispatch a notification |
+| `POST` | `/notification/sources` | Create a source |
+| `GET` | `/notification/sources/{code}` | Read a source |
+| `PATCH` | `/notification/sources/metadata` | Update source metadata |
+| `POST` | `/notification/targets` | Create a target |
+| `GET` | `/notification/targets/{code}` | Read a target |
+| `PATCH` | `/notification/targets/metadata` | Update target metadata |
+| `POST` | `/notification/templates` | Create a template version |
 
-| Kết quả | `deliveries.status` | `delivery_attempts.status` |
-|---------|---------------------|----------------------------|
-| Kênh chấp nhận | `SENT` | `SUCCESS` |
-| Còn lượt retry | `RETRY_WAIT` | `FAILED` hoặc `TIMEOUT` |
-| Hết lượt retry | `FAILED` | `FAILED` hoặc `TIMEOUT` |
-
-Kafka bật thì delivery ở `PENDING` cho đến khi consumer xử lý. Kafka tắt thì API gửi ngay và ghi kết quả.
-
-`notifications` không có cột status. Trạng thái gửi nằm ở delivery của `notification_id`.
-
-## Routing
-
-- Public: `GET /health`
-- Protected bằng `api-key`: các route dưới `/notification`
+All `/notification` routes require `api-key` authentication. Notification CRUD routes are not provided.
