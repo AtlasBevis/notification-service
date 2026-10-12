@@ -6,12 +6,9 @@ use crate::models::{
     DefinitionData, DeliveryDraft, NotifyMessage, NotifyRequest, NotifyValue, TargetData,
     EVENT_TYPE_SEND,
 };
-use crate::repository::DeliveriesRepository;
-use crate::services::definition::{DefinitionService, DefinitionTrait};
-use crate::services::notification::NotificationService;
 use crate::services::{
-    ChannelService, ChannelTrait, EmailTrait, MSTrait, SourceService, SourceTrait, TargetTrait,
-    TargetsService, TemplateService, TemplateTrait, WebhookServiceTrait,
+    ChannelTrait, DefinitionTrait, DeliveryTrait, EmailTrait, MSTrait, NotificationTrait,
+    SourceTrait, TargetTrait, TemplateTrait, WebhookServiceTrait,
 };
 use async_trait::async_trait;
 use serde_json::Value;
@@ -30,13 +27,13 @@ pub trait NotifyTrait: Send + Sync {
 #[derive(Clone)]
 pub struct NotifyService {
     kafka: Option<Arc<KafkaBus>>,
-    definitions: Arc<DefinitionService>,
-    sources: Arc<SourceService>,
-    channels: Arc<ChannelService>,
-    targets: Arc<TargetsService>,
-    notifications: Arc<NotificationService>,
-    deliveries: DeliveriesRepository,
-    templates: Arc<TemplateService>,
+    definitions: Arc<dyn DefinitionTrait>,
+    sources: Arc<dyn SourceTrait>,
+    channels: Arc<dyn ChannelTrait>,
+    targets: Arc<dyn TargetTrait>,
+    notifications: Arc<dyn NotificationTrait>,
+    deliveries: Arc<dyn DeliveryTrait>,
+    templates: Arc<dyn TemplateTrait>,
     emails: Arc<dyn EmailTrait>,
     teams: Arc<dyn MSTrait>,
     webhooks: Arc<dyn WebhookServiceTrait>,
@@ -45,13 +42,13 @@ pub struct NotifyService {
 impl NotifyService {
     pub fn new(
         kafka: Option<Arc<KafkaBus>>,
-        definitions: Arc<DefinitionService>,
-        notifications: Arc<NotificationService>,
-        deliveries: DeliveriesRepository,
-        sources: Arc<SourceService>,
-        targets: Arc<TargetsService>,
-        channels: Arc<ChannelService>,
-        templates: Arc<TemplateService>,
+        definitions: Arc<dyn DefinitionTrait>,
+        notifications: Arc<dyn NotificationTrait>,
+        deliveries: Arc<dyn DeliveryTrait>,
+        sources: Arc<dyn SourceTrait>,
+        targets: Arc<dyn TargetTrait>,
+        channels: Arc<dyn ChannelTrait>,
+        templates: Arc<dyn TemplateTrait>,
         emails: Arc<dyn EmailTrait>,
         teams: Arc<dyn MSTrait>,
         webhooks: Arc<dyn WebhookServiceTrait>,

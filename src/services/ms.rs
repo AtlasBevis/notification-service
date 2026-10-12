@@ -8,7 +8,7 @@ use crate::error::{AppError, AppResult};
 use crate::infras::http::HttpClient;
 use crate::models::NotifyValue;
 use crate::services::template::wrap_teams_message;
-use crate::services::{ChannelService, ChannelTrait, TargetTrait, TargetsService};
+use crate::services::{ChannelTrait, TargetTrait};
 
 #[async_trait]
 pub trait MSTrait: Send + Sync {
@@ -18,15 +18,15 @@ pub trait MSTrait: Send + Sync {
 #[derive(Clone)]
 pub struct MSService {
     http: Arc<HttpClient>,
-    channels: Arc<ChannelService>,
-    targets: Arc<TargetsService>,
+    channels: Arc<dyn ChannelTrait>,
+    targets: Arc<dyn TargetTrait>,
 }
 
 impl MSService {
     pub fn new(
         http: Arc<HttpClient>,
-        channels: Arc<ChannelService>,
-        targets: Arc<TargetsService>,
+        channels: Arc<dyn ChannelTrait>,
+        targets: Arc<dyn TargetTrait>,
     ) -> Self {
         Self {
             http,

@@ -14,7 +14,7 @@ use crate::models::{
     NotifyValue, TokenBodyFormat, WebhookAuthConfig, WebhookConfig, WebhookPayload,
 };
 use crate::repository::WebhookRepository;
-use crate::services::{ChannelService, ChannelTrait};
+use crate::services::ChannelTrait;
 
 /// Refresh a cached token this long before the provider says it expires.
 const TOKEN_EXPIRY_SKEW: Duration = Duration::from_secs(30);
@@ -44,13 +44,13 @@ struct CachedToken {
 pub struct WebhookService {
     client: Client,
     repo: WebhookRepository,
-    channels: Arc<ChannelService>,
+    channels: Arc<dyn ChannelTrait>,
     /// Keyed by `webhook_auth_configs.id`.
     tokens: Arc<Mutex<HashMap<i32, CachedToken>>>,
 }
 
 impl WebhookService {
-    pub fn new(client: Client, repo: WebhookRepository, channels: Arc<ChannelService>) -> Self {
+    pub fn new(client: Client, repo: WebhookRepository, channels: Arc<dyn ChannelTrait>) -> Self {
         Self {
             client,
             repo,

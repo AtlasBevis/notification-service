@@ -8,9 +8,9 @@ use crate::repository::{
     SourceRepository, TargetsRepository, TemplateRepository, WebhookRepository,
 };
 use crate::services::{
-    ChannelService, ChannelTrait, DefinitionService, EmailService, MSService, NotificationService,
-    NotifyService, SourceService, SourceTrait, TargetTrait, TargetsService, TemplateService,
-    WebhookService,
+    ChannelService, ChannelTrait, DefinitionService, DeliveryService, EmailService, MSService,
+    NotificationService, NotifyService, SourceService, SourceTrait, TargetTrait, TargetsService,
+    TemplateService, WebhookService,
 };
 use crate::state::{AppState, SharedState};
 
@@ -61,11 +61,12 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
         .context("Failed to load targets")?;
 
     let notification_service = Arc::new(NotificationService::new(notifications_repo));
+    let delivery_service = Arc::new(DeliveryService::new(deliveries_repo));
     let notify_service = Arc::new(NotifyService::new(
         infras.kafka.clone(),
         definitions_service,
         notification_service.clone(),
-        deliveries_repo,
+        delivery_service,
         sources_service.clone(),
         targets_service.clone(),
         channels_service.clone(),
@@ -115,6 +116,9 @@ pub async fn build_notification_consumer(config: &Config) -> Result<Arc<NotifySe
     let notification_service = Arc::new(NotificationService::new(NotificationsRepository::new(
         pool.clone(),
     )));
+    let delivery_service = Arc::new(DeliveryService::new(DeliveriesRepository::new(
+        pool.clone(),
+    )));
     let webhook_service = Arc::new(WebhookService::new(
         reqwest::Client::builder()
             .build()
@@ -134,7 +138,7 @@ pub async fn build_notification_consumer(config: &Config) -> Result<Arc<NotifySe
             pool.clone(),
         ))),
         notification_service,
-        DeliveriesRepository::new(pool),
+        delivery_service,
         sources_service,
         targets_service,
         channels_service,

@@ -1,5 +1,6 @@
 pub mod channel;
 pub mod definition;
+pub mod delivery;
 pub mod email;
 pub mod ms;
 pub mod notification;
@@ -11,9 +12,10 @@ pub mod webhook;
 
 pub use channel::{ChannelService, ChannelTrait};
 pub use definition::{DefinitionService, DefinitionTrait};
+pub use delivery::{DeliveryService, DeliveryTrait};
 pub use email::{EmailService, EmailTrait};
 pub use ms::{MSService, MSTrait};
-pub use notification::NotificationService;
+pub use notification::{NotificationService, NotificationTrait};
 pub use notify::NotifyService;
 pub use notify::NotifyTrait;
 pub use source::{SourceService, SourceTrait};

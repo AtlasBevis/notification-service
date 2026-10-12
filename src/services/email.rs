@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use crate::error::{AppError, AppResult};
 use crate::models::NotifyValue;
-use crate::services::{ChannelService, ChannelTrait};
+use crate::services::ChannelTrait;
 
 #[async_trait]
 pub trait EmailTrait: Send + Sync {
@@ -16,11 +16,11 @@ pub trait EmailTrait: Send + Sync {
 
 #[derive(Clone)]
 pub struct EmailService {
-    channels: Arc<ChannelService>,
+    channels: Arc<dyn ChannelTrait>,
 }
 
 impl EmailService {
-    pub fn new(channels: Arc<ChannelService>) -> Self {
+    pub fn new(channels: Arc<dyn ChannelTrait>) -> Self {
         Self { channels }
     }
 }
