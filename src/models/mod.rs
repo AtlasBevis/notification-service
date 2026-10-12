@@ -22,4 +22,6 @@ pub use notify_request::NotifyRequest;
 pub use source::{CreateSourceRequest, PatchMetadataRequest, SourceData};
 pub use target::{CreateTargetRequest, Recipients, TargetData};
 pub use template::{CreateTemplateRequest, TemplateData};
-pub use webhook::{TokenBodyFormat, WebhookAuthConfig, WebhookConfig, WebhookPayload};
+pub use webhook::{
+    TokenBodyFormat, WebhookAuthConfig, WebhookAuthMode, WebhookConfig, WebhookPayload,
+};

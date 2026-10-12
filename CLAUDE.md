@@ -12,7 +12,7 @@ Repository guidance for AI assistants working on this Rust + Axum + Kafka notifi
 
 Default listen address is `0.0.0.0:8080` (see `config.yaml` and environment overrides).
 
-Webhook token endpoint headers are configured with `webhook_auth_configs.request_headers`. The configured token header (`header_name` and `header_prefix`) is attached to the outgoing webhook request.
+Every webhook config must have a row in `webhook_auth_configs`; a missing row is `AppError::NotFound`. `auth_mode = STATIC` sends `header_value` as `header_name`. `auth_mode = TOKEN_ENDPOINT` obtains and caches a token from `token_url`, then sends it using `header_name` and `header_prefix`. `webhook_configs.headers` contains additional static outgoing headers; auth header values take precedence on duplicate names. Never log or serialize static secrets or tokens. Each delivery calls the webhook endpoint once.
 
 ## Database constraints and validation
 
@@ -42,6 +42,8 @@ src/
 ```
 
 Keep handlers thin: parse/normalize/validate requests, call a service trait, and return `ApiResponse`. Put orchestration in services and SQL in repositories. Keep concrete service implementations wired in `bootstrap/`.
+
+Repositories own SQL and return domain models. Put all PostgreSQL `Row` to model conversion and persisted-value parsing in the corresponding model's `map_row(&Row) -> AppResult<Self>` method; repository methods should query rows and call that mapper rather than reading columns themselves.
 
 ## Routes
 

@@ -4,7 +4,7 @@ HTTP notification microservice (Rust + Axum + Kafka).
 
 Caller chỉ gọi `POST /notification/notify` với `source`, `code`, `trace_id` và `variables` để gửi notification. Service tra `definitions`, render template, tự ghi bản ghi runtime vào `notifications` và `deliveries`, rồi gửi qua `EMAIL`, `MSTEAMS` hoặc `WEBHOOK`. Không có API tạo, xem danh sách, cập nhật hoặc xóa notification; `definitions` được cấu hình trong database.
 
-`WebhookService` gửi một HTTP request tới endpoint theo `webhook_configs`; nếu cấu hình auth yêu cầu token, service lấy token rồi đính kèm trong header. Mỗi delivery chỉ gọi endpoint webhook một lần. Worker ghi kết quả vào `delivery_attempts`.
+`WebhookService` gửi một HTTP request tới endpoint theo `webhook_configs`. Header auth hỗ trợ token tĩnh (`STATIC`) hoặc lấy token từ endpoint (`TOKEN_ENDPOINT`); `webhook_configs.headers` chứa các header bổ sung như `service: MIS`. Token chỉ được lấy khi cấu hình `TOKEN_ENDPOINT`. Mỗi delivery chỉ gọi endpoint webhook một lần; worker ghi kết quả vào `delivery_attempts`.
 
 - Request flow: [`docs/api_flow.md`](docs/api_flow.md)
 - Database setup: [`migration/FLOW.md`](migration/FLOW.md)
@@ -17,11 +17,14 @@ Schema nằm trong [`migration/`](migration/), theo thứ tự:
 2. `channels`
 3. `targets`
 4. `webhook_configs`
-5. `templates`
-6. `definitions`
-7. `notifications`
-8. `deliveries`
-9. `delivery_attempts`
+5. `webhook_auth_configs`
+6. `templates`
+7. `definitions`
+8. `notifications`
+9. `deliveries`
+10. `delivery_attempts`
+
+Webhook configuration is created by migrations `009` and `010`; see [`migration/FLOW.md`](migration/FLOW.md) for the migration order and auth modes.
 
 ---
 

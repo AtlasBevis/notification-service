@@ -61,7 +61,27 @@ sequenceDiagram
 
 `code` resolves the preconfigured definition. `trace_id` is the caller's idempotency key. A repeated `(source, trace_id)` is rejected with **409 Conflict**. On acceptance, the API stores the notification and one delivery in the same transaction and returns **202 Accepted**.
 
-`webhook_auth_configs.request_headers` configures headers for the token request. The configured token header (`header_name` and `header_prefix`) is attached to the outgoing webhook request.
+Each webhook config must have a `webhook_auth_configs` row; a missing row returns **404 Not Found**. With `auth_mode = STATIC`, the service attaches `header_value` using `header_name` (for example, `x-api-key`). With `auth_mode = TOKEN_ENDPOINT`, it calls `token_url`, reads the token using `token_path`, caches it according to the configured TTL, and attaches it using `header_name` plus `header_prefix`. Secrets and tokens are never included in the body or logs.
+
+Additional static headers belong in `webhook_configs.headers`, for example `{"service": "MIS"}`. They are sent with either authentication mode. If a configured header repeats the auth header name, the auth value takes precedence.
+
+```sql
+UPDATE webhook_configs
+SET headers = '{"service": "MIS"}'::jsonb
+WHERE id = <webhook_config_id>;
+```
+
+Configure `STATIC` mode for a key supplied directly by the destination:
+
+```sql
+UPDATE webhook_auth_configs
+SET auth_mode = 'STATIC',
+    header_name = 'x-api-key',
+    header_value = '<secret>'
+WHERE webhook_config_id = <webhook_config_id>;
+```
+
+For `TOKEN_ENDPOINT`, set `auth_mode = 'TOKEN_ENDPOINT'`, provide `token_url`, `token_path`, and the token request fields (`token_method`, `token_body_format`, `request_headers`, `request_body`). `header_name` and `header_prefix` control how the returned token is sent. `expires_in_path` and `default_ttl_seconds` control token caching.
 
 ## Delivery status
 
@@ -73,7 +93,7 @@ sequenceDiagram
 | Another retry will run | `RETRY_WAIT` | `FAILED` or `TIMEOUT` |
 | Retries exhausted | `FAILED` | `FAILED` or `TIMEOUT` |
 
-Webhook method and timeout come from `webhook_configs`. Each webhook delivery calls its endpoint once; when auth is configured, the service obtains the token and sends it in the configured header. Kafka enabled means the API publishes for asynchronous dispatch; otherwise the API dispatches directly. Non-webhook Kafka deliveries retain the worker retry behavior.
+Webhook method and timeout come from `webhook_configs`. Each webhook delivery calls its endpoint once; token endpoint mode may make a separate request to obtain an expired or missing token. Kafka enabled means the API publishes for asynchronous dispatch; otherwise the API dispatches directly. Non-webhook Kafka deliveries retain the worker retry behavior.
 
 ## Routes
 

@@ -11,33 +11,23 @@ use tokio::sync::Mutex;
 use crate::enums::Method as ConfiguredMethod;
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    NotifyValue, TokenBodyFormat, WebhookAuthConfig, WebhookConfig, WebhookPayload,
+    NotifyValue, TokenBodyFormat, WebhookAuthConfig, WebhookAuthMode, WebhookConfig, WebhookPayload,
 };
 use crate::repository::WebhookRepository;
 use crate::services::ChannelTrait;
 
-/// Refresh a cached token this long before the provider says it expires.
 const TOKEN_EXPIRY_SKEW: Duration = Duration::from_secs(30);
 
 #[async_trait]
 pub trait WebhookServiceTrait: Send + Sync {
-    /// Ensures the channel has a webhook config (auth config is not loaded here).
     async fn validate(&self, channel_id: i32) -> AppResult<()>;
     async fn get_config(&self, channel_id: i32) -> AppResult<WebhookConfig>;
     async fn get_webhook_auth_configs(
         &self,
         webhook_config_id: i32,
-    ) -> AppResult<Option<WebhookAuthConfig>>;
-    /// `max_retries + 1`, from the channel's webhook config.
+    ) -> AppResult<WebhookAuthConfig>;
     async fn max_attempts(&self, channel_id: i32) -> AppResult<u32>;
     async fn send_webhook(&self, request: &NotifyValue) -> AppResult<()>;
-}
-
-#[derive(Clone)]
-struct CachedToken {
-    /// Ready-to-send header value, e.g. `Bearer eyJ...`.
-    header_value: HeaderValue,
-    expires_at: Instant,
 }
 
 #[derive(Clone)]
@@ -45,8 +35,13 @@ pub struct WebhookService {
     client: Client,
     repo: WebhookRepository,
     channels: Arc<dyn ChannelTrait>,
-    /// Keyed by `webhook_auth_configs.id`.
     tokens: Arc<Mutex<HashMap<i32, CachedToken>>>,
+}
+
+#[derive(Clone)]
+struct CachedToken {
+    header_value: HeaderValue,
+    expires_at: Instant,
 }
 
 impl WebhookService {
@@ -86,6 +81,69 @@ impl WebhookService {
         }
     }
 
+    fn map_send_error(step: &str, err: reqwest::Error) -> AppError {
+        if err.is_timeout() {
+            AppError::internal(format!("{step} request timed out"))
+        } else {
+            AppError::internal(format!("{step} connection failed"))
+        }
+    }
+
+    fn auth_header_name(auth: &WebhookAuthConfig) -> AppResult<HeaderName> {
+        let name = HeaderName::from_bytes(auth.header_name.as_bytes())
+            .map_err(|_| AppError::internal("webhook auth header name is invalid"))?;
+        Ok(name)
+    }
+
+    fn validate_auth(auth: &WebhookAuthConfig) -> AppResult<()> {
+        Self::auth_header_name(auth)?;
+        match auth.mode {
+            WebhookAuthMode::Static => {
+                let value = auth.header_value.as_deref().ok_or_else(|| {
+                    AppError::internal("webhook static auth header value is required")
+                })?;
+                HeaderValue::from_str(value)
+                    .map_err(|_| AppError::internal("webhook auth header value is invalid"))?;
+            }
+            WebhookAuthMode::TokenEndpoint => {
+                let token_url = auth
+                    .token_url
+                    .as_deref()
+                    .ok_or_else(|| AppError::internal("webhook token URL is required"))?;
+                Self::validate_endpoint(token_url)?;
+                Self::static_headers(&auth.request_headers)?;
+                HeaderValue::from_str(&auth.header_prefix)
+                    .map_err(|_| AppError::internal("webhook auth header prefix is invalid"))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn static_headers(headers: &Value) -> AppResult<HeaderMap> {
+        let mut map = HeaderMap::new();
+        for (name, value) in headers.as_object().into_iter().flatten() {
+            let value = value
+                .as_str()
+                .ok_or_else(|| AppError::internal("webhook header values must be strings"))?;
+            let name = HeaderName::from_bytes(name.as_bytes())
+                .map_err(|_| AppError::internal("webhook header name is invalid"))?;
+            let value = HeaderValue::from_str(value)
+                .map_err(|_| AppError::internal("webhook header value is invalid"))?;
+            map.insert(name, value);
+        }
+        Ok(map)
+    }
+
+    fn outgoing_headers(
+        config: &WebhookConfig,
+        auth: (&HeaderName, HeaderValue),
+    ) -> AppResult<HeaderMap> {
+        let mut headers = Self::static_headers(&config.headers)?;
+        // The auth value takes precedence if a configured header uses the same name.
+        headers.insert(auth.0.clone(), auth.1);
+        Ok(headers)
+    }
+
     fn token_method(method: ConfiguredMethod) -> Method {
         match method {
             ConfiguredMethod::GET => Method::GET,
@@ -95,44 +153,13 @@ impl WebhookService {
         }
     }
 
-    fn map_send_error(step: &str, err: reqwest::Error) -> AppError {
-        if err.is_timeout() {
-            AppError::internal(format!("{step} request timed out"))
-        } else {
-            AppError::internal(format!("{step} connection failed"))
-        }
-    }
-
-    /// Walks a dot path (`data.access_token`) through a JSON value.
-    fn json_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
-        path.split('.')
-            .filter(|segment| !segment.is_empty())
-            .try_fold(value, |current, segment| current.get(segment))
-    }
-
-    fn static_headers(headers: &Value) -> AppResult<HeaderMap> {
-        let mut map = HeaderMap::new();
-        for (name, value) in headers.as_object().into_iter().flatten() {
-            let value = value
-                .as_str()
-                .ok_or_else(|| AppError::internal("webhook auth header values must be strings"))?;
-            let name = HeaderName::from_bytes(name.as_bytes())
-                .map_err(|_| AppError::internal("webhook auth header name is invalid"))?;
-            let value = HeaderValue::from_str(value)
-                .map_err(|_| AppError::internal("webhook auth header value is invalid"))?;
-            map.insert(name, value);
-        }
-        Ok(map)
-    }
-
-    /// Form bodies are flat `key=value` pairs; non-string JSON values are stringified.
     fn form_fields(body: &Value) -> Vec<(String, String)> {
         body.as_object()
             .into_iter()
             .flatten()
             .map(|(key, value)| {
                 let value = match value {
-                    Value::String(s) => s.clone(),
+                    Value::String(value) => value.clone(),
                     other => other.to_string(),
                 };
                 (key.clone(), value)
@@ -140,14 +167,16 @@ impl WebhookService {
             .collect()
     }
 
-    /// Returns a cached token, or calls the token endpoint (step 1).
-    async fn token(&self, auth: &WebhookAuthConfig, force_refresh: bool) -> AppResult<HeaderValue> {
-        if !force_refresh {
-            let tokens = self.tokens.lock().await;
-            if let Some(cached) = tokens.get(&auth.id) {
-                if cached.expires_at > Instant::now() {
-                    return Ok(cached.header_value.clone());
-                }
+    fn json_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
+        path.split('.')
+            .filter(|segment| !segment.is_empty())
+            .try_fold(value, |current, segment| current.get(segment))
+    }
+
+    async fn token(&self, auth: &WebhookAuthConfig) -> AppResult<HeaderValue> {
+        if let Some(cached) = self.tokens.lock().await.get(&auth.id) {
+            if cached.expires_at > Instant::now() {
+                return Ok(cached.header_value.clone());
             }
         }
 
@@ -158,17 +187,19 @@ impl WebhookService {
     }
 
     async fn fetch_token(&self, auth: &WebhookAuthConfig) -> AppResult<CachedToken> {
-        let url = Self::validate_endpoint(&auth.token_url)?;
-        let method = Self::token_method(auth.http_method);
-        let has_body = method != Method::GET;
-
+        let token_url = auth
+            .token_url
+            .as_deref()
+            .ok_or_else(|| AppError::internal("webhook token URL is required"))?;
+        let url = Self::validate_endpoint(token_url)?;
+        let method = Self::token_method(auth.token_method);
         let mut request = self
             .client
-            .request(method, url)
+            .request(method.clone(), url)
             .timeout(Duration::from_secs(auth.timeout_seconds.max(1)))
             .headers(Self::static_headers(&auth.request_headers)?);
-        if has_body {
-            request = match auth.body_format {
+        if method != Method::GET {
+            request = match auth.token_body_format {
                 TokenBodyFormat::Json => request.json(&auth.request_body),
                 TokenBodyFormat::Form => request.form(&Self::form_fields(&auth.request_body)),
             };
@@ -188,19 +219,12 @@ impl WebhookService {
             .json()
             .await
             .map_err(|_| AppError::internal("webhook token response is not valid JSON"))?;
-
         let token = Self::json_path(&body, &auth.token_path)
             .and_then(Value::as_str)
             .filter(|token| !token.is_empty())
-            .ok_or_else(|| {
-                AppError::internal(format!(
-                    "webhook token response has no string at `{}`",
-                    auth.token_path
-                ))
-            })?;
+            .ok_or_else(|| AppError::internal("webhook token response is missing the token"))?;
         let header_value = HeaderValue::from_str(&format!("{}{}", auth.header_prefix, token))
-            .map_err(|_| AppError::internal("webhook token is not a valid header value"))?;
-
+            .map_err(|_| AppError::internal("webhook token header value is invalid"))?;
         let ttl_seconds = auth
             .expires_in_path
             .as_deref()
@@ -208,37 +232,49 @@ impl WebhookService {
             .and_then(|value| {
                 value
                     .as_u64()
-                    .or_else(|| value.as_str().and_then(|s| s.parse().ok()))
+                    .or_else(|| value.as_str().and_then(|value| value.parse().ok()))
             })
             .filter(|ttl| *ttl > 0)
             .unwrap_or(auth.default_ttl_seconds);
         let ttl = Duration::from_secs(ttl_seconds).saturating_sub(TOKEN_EXPIRY_SKEW);
-
         Ok(CachedToken {
             header_value,
             expires_at: Instant::now() + ttl,
         })
     }
 
-    /// Step 2: calls the webhook, attaching the token when auth is configured.
+    async fn auth_header(&self, auth: &WebhookAuthConfig) -> AppResult<(HeaderName, HeaderValue)> {
+        Self::validate_auth(auth)?;
+        let name = Self::auth_header_name(auth)?;
+        let value = match auth.mode {
+            WebhookAuthMode::Static => HeaderValue::from_str(
+                auth.header_value
+                    .as_deref()
+                    .ok_or_else(|| AppError::internal("webhook static auth value is required"))?,
+            )
+            .map_err(|_| AppError::internal("webhook auth header value is invalid"))?,
+            WebhookAuthMode::TokenEndpoint => self.token(auth).await?,
+        };
+        Ok((name, value))
+    }
+
+    /// Calls the webhook once, attaching the configured authentication header.
     async fn trigger(
         &self,
         config: &WebhookConfig,
         payload: &WebhookPayload,
-        auth_header: Option<(&HeaderName, HeaderValue)>,
+        headers: HeaderMap,
     ) -> AppResult<StatusCode> {
         let url = Self::validate_endpoint(&config.endpoint_url)?;
         let method = Self::request_method(config.http_method)?;
         let timeout = Duration::from_secs(config.timeout_seconds.max(1));
 
-        let mut request = self
+        let request = self
             .client
             .request(method, url)
             .timeout(timeout)
-            .json(payload);
-        if let Some((name, value)) = auth_header {
-            request = request.header(name.clone(), value);
-        }
+            .json(payload)
+            .headers(headers);
         let response = request
             .send()
             .await
@@ -251,19 +287,11 @@ impl WebhookService {
         &self,
         config: &WebhookConfig,
         payload: &WebhookPayload,
-        auth: Option<&WebhookAuthConfig>,
+        auth: &WebhookAuthConfig,
     ) -> AppResult<()> {
-        let Some(auth) = auth else {
-            let status = self.trigger(config, payload, None).await?;
-            return Self::check_status(status);
-        };
-
-        let header_name = HeaderName::from_bytes(auth.header_name.as_bytes())
-            .map_err(|_| AppError::internal("webhook auth header_name is invalid"))?;
-        let token = self.token(auth, false).await?;
-        let status = self
-            .trigger(config, payload, Some((&header_name, token)))
-            .await?;
+        let (header_name, header_value) = self.auth_header(auth).await?;
+        let headers = Self::outgoing_headers(config, (&header_name, header_value))?;
+        let status = self.trigger(config, payload, headers).await?;
         Self::check_status(status)
     }
 
@@ -282,7 +310,11 @@ impl WebhookService {
 #[async_trait]
 impl WebhookServiceTrait for WebhookService {
     async fn validate(&self, channel_id: i32) -> AppResult<()> {
-        self.repo.find_by_channel_id(channel_id).await.map(|_| ())
+        let config = self.repo.find_by_channel_id(channel_id).await?;
+        Self::static_headers(&config.headers)?;
+        let auth = self.repo.find_auth_by_webhook_config_id(config.id).await?;
+        Self::validate_auth(&auth)?;
+        Ok(())
     }
 
     async fn get_config(&self, channel_id: i32) -> AppResult<WebhookConfig> {
@@ -293,7 +325,7 @@ impl WebhookServiceTrait for WebhookService {
     async fn get_webhook_auth_configs(
         &self,
         webhook_config_id: i32,
-    ) -> AppResult<Option<WebhookAuthConfig>> {
+    ) -> AppResult<WebhookAuthConfig> {
         self.repo
             .find_auth_by_webhook_config_id(webhook_config_id)
             .await
@@ -306,7 +338,6 @@ impl WebhookServiceTrait for WebhookService {
     async fn send_webhook(&self, request: &NotifyValue) -> AppResult<()> {
         let config = self.get_config(request.channel_id).await?;
         let auth = self.get_webhook_auth_configs(config.id).await?;
-        self.deliver(&config, &request.variables, auth.as_ref())
-            .await
+        self.deliver(&config, &request.variables, &auth).await
     }
 }

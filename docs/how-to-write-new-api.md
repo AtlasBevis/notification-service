@@ -13,5 +13,8 @@ Return **only** `ApiResponse` / `ApiResponse<T>` (never `AppResult<…>`). Examp
 ## 3. Register the route
 Nest it in `src/api/routes.rs` under `/notification` on the **protected** router (`api-key` + logging), unless the endpoint must be public like `/health`.
 
+## Repository and model mapping
+Keep SQL in `src/repository/`. For database results, define `map_row(&tokio_postgres::Row) -> AppResult<Self>` on the corresponding model in `src/models/`. Repository methods should handle query/not-found behavior, then call the model mapper; do not read columns or parse persisted enums in the repository.
+
 ## Why do this?
 - Handlers stay thin; composition root stays in `src/bootstrap/mod.rs`.

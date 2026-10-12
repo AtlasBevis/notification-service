@@ -22,11 +22,10 @@ Get-ChildItem migration\*.sql | Sort-Object Name | ForEach-Object {
 | `006_notifications.sql` | Accepted request and trace ID uniqueness |
 | `007_deliveries.sql` | Rendered message and current delivery state |
 | `008_delivery_attempts.sql` | Dispatch attempt history |
-| `009_webhook_auth_configs.sql` | Webhook authentication configuration |
-| `010_webhook_config.sql` | Webhook endpoint, method, timeout, and retries |
-| `011_drop_webhook_auth_checks.sql` | Removes legacy webhook `CHECK` constraints; validation stays in the application |
+| `009_webhook_config.sql` | Webhook endpoint and outgoing headers |
+| `010_webhook_auth_configs.sql` | Static or token endpoint authentication |
 
-After the migrations, add each notification definition directly to `definitions` and associate it with existing source, channel, target, and template rows. Configure webhook channels in `webhook_configs` as needed.
+After the migrations, add each notification definition directly to `definitions` and associate it with existing source, channel, target, and template rows. Each webhook channel needs a `webhook_configs` row and a `webhook_auth_configs` row. Use `auth_mode = STATIC` with `header_value`, or `auth_mode = TOKEN_ENDPOINT` with `token_url` and the token request/response fields. Put additional outgoing headers such as `{"service":"MIS"}` in `webhook_configs.headers`.
 
 ## Runtime lifecycle
 
