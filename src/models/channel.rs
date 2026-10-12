@@ -14,6 +14,7 @@ pub struct SmtpConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelData {
+    pub id: i32,
     pub code: String,
     pub name: String,
     pub status: String,
@@ -25,6 +26,7 @@ pub struct ChannelData {
 impl ChannelData {
     pub fn map_row(row: &tokio_postgres::Row) -> Self {
         Self {
+            id: row.get("id"),
             code: row.get("code"),
             name: row.get("name"),
             status: row.get("status"),

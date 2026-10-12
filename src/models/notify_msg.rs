@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::models::{NotificationData, NotifyRequest, Recipients};
+use crate::models::{DefinitionData, NotifyRequest, Recipients};
 
 pub const EVENT_TYPE_SEND: &str = "notification.send";
 
@@ -71,17 +71,21 @@ impl NotifyMessage {
 
     pub fn with_definition(
         mut self,
-        definition: &NotificationData,
+        definition: &DefinitionData,
+        source_code: impl Into<String>,
+        channel_code: impl Into<String>,
+        target_code: impl Into<String>,
         template: impl Into<String>,
         recipients: Recipients,
     ) -> Self {
-        self.key.service = definition.source_code.clone();
+        let source_code = source_code.into();
+        self.key.service = source_code.clone();
         self.key.notification_code = definition.code.clone();
         self.value.definition_id = definition.id;
         self.value.code = definition.code.clone();
-        self.value.source = definition.source_code.clone();
-        self.value.target = definition.target_code.clone();
-        self.value.channel = definition.channel_code.clone();
+        self.value.source = source_code;
+        self.value.target = target_code.into();
+        self.value.channel = channel_code.into();
         self.value.kind = definition.level.clone();
         self.value.template = template.into();
         self.value.recipients = recipients;

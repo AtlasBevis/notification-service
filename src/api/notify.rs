@@ -1,5 +1,5 @@
 use crate::models::{ApiRequest, ApiResponse, NotifyRequest};
-use crate::services::NotifyServiceTrait;
+use crate::services::NotifyTrait;
 use crate::state::SharedState;
 use axum::extract::State;
 

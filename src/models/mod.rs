@@ -8,6 +8,7 @@ mod page;
 mod source;
 mod target;
 mod template;
+mod webhook;
 
 pub mod api_request;
 pub mod api_response;
@@ -27,3 +28,4 @@ pub use page::PageData;
 pub use source::{CreateSourceRequest, PatchMetadataRequest, SourceData};
 pub use target::{CreateTargetRequest, Recipients, TargetData};
 pub use template::{CreateTemplateRequest, TemplateData};
+pub use webhook::{WebhookConfig, WebhookPayload};

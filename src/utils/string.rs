@@ -13,7 +13,6 @@ pub fn get_env(key: &str) -> Option<String> {
     std::env::var(key).ok().and_then(non_empty)
 }
 
-
 #[allow(dead_code)]
 pub fn trim_op(op: &mut Option<String>) {
     if let Some(v) = op.as_mut() {

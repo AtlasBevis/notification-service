@@ -1,9 +1,26 @@
 # Data Notification
 
-HTTP notification microservice (Rust + Kafka)
+HTTP notification microservice (Rust + Axum + Kafka).
 
-- Tài liệu kiến trúc / how-to: [`docs/`](docs/)
+Caller gọi `POST /notification/notify` với `code`, `trace_id` và `variables`. Service tra `definitions`, render template, ghi `notifications` và `deliveries`, rồi gửi qua `EMAIL`, `MSTEAMS` hoặc `WEBHOOK`.
+
+`WebhookService` gửi một HTTP request theo `webhook_configs`. Worker quản lý retry và ghi `delivery_attempts`.
+
+- Request flow: [`docs/api_flow.md`](docs/api_flow.md)
+- Tài liệu khác: [`docs/`](docs/)
 - Hướng dẫn AI: [`CLAUDE.md`](CLAUDE.md)
+
+Schema nằm trong [`migration/`](migration/), theo thứ tự:
+
+1. `sources`
+2. `channels`
+3. `targets`
+4. `webhook_configs`
+5. `templates`
+6. `definitions`
+7. `notifications`
+8. `deliveries`
+9. `delivery_attempts`
 
 ---
 

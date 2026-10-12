@@ -5,13 +5,13 @@ pub const WEBHOOK: &str = "WEBHOOK";
 pub const MSTEAMS: &str = "MSTEAMS";
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Serialize, Deserialize)]
-pub enum ChannelEnum {
+pub enum Channel {
     MSTEAMS,
     WEBHOOK,
     EMAIL,
 }
 
-impl ChannelEnum {
+impl Channel {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::MSTEAMS => MSTEAMS,
@@ -30,14 +30,14 @@ impl ChannelEnum {
     }
 }
 
-impl std::fmt::Display for ChannelEnum {
+impl std::fmt::Display for Channel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl From<ChannelEnum> for String {
-    fn from(value: ChannelEnum) -> Self {
+impl From<Channel> for String {
+    fn from(value: Channel) -> Self {
         value.as_str().to_string()
     }
 }

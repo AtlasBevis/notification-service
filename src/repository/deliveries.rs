@@ -20,13 +20,35 @@ impl DeliveriesRepository {
         status: &str,
         error_message: Option<&str>,
     ) -> Result<(), AppError> {
+        let attempt_status = if status == "SENT" {
+            "SUCCESS"
+        } else if error_message.is_some_and(|message| message.contains("timed out")) {
+            "TIMEOUT"
+        } else {
+            "FAILED"
+        };
+        self.record_attempt(delivery_id, status, attempt_status, error_message)
+            .await
+    }
+
+    pub async fn record_attempt(
+        &self,
+        delivery_id: i64,
+        delivery_status: &str,
+        attempt_status: &str,
+        error_message: Option<&str>,
+    ) -> Result<(), AppError> {
         if delivery_id <= 0 {
             return Ok(());
         }
         let mut client = self.pool.get().await?;
         let tx = client.transaction().await?;
         let now = Utc::now();
-        let sent_at = if status == "SENT" { Some(now) } else { None };
+        let sent_at = if delivery_status == "SENT" {
+            Some(now)
+        } else {
+            None
+        };
 
         let row = tx
             .query_one(
@@ -38,11 +60,16 @@ impl DeliveriesRepository {
                      updated_at = $5
                  WHERE id = $1
                  RETURNING attempt_count",
-                &[&delivery_id, &status, &error_message, &sent_at, &now],
+                &[
+                    &delivery_id,
+                    &delivery_status,
+                    &error_message,
+                    &sent_at,
+                    &now,
+                ],
             )
             .await?;
         let attempt_no: i32 = row.get("attempt_count");
-        let attempt_status = if status == "SENT" { "SUCCESS" } else { "FAILED" };
 
         tx.execute(
             "INSERT INTO delivery_attempts (

@@ -11,7 +11,7 @@ CREATE TABLE sources (
   metadata          JSONB        NOT NULL DEFAULT '{}'::jsonb
 );
 
--- insert
+-- example
 -- INSERT INTO sources (code, name, updated_at) VALUES
 --   ('AIRFLOW', 'Airflow', now()),
 --   ('ETL',     'ETL batch', now()),

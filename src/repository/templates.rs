@@ -6,11 +6,11 @@ use crate::models::{CreateTemplateRequest, TemplateData};
 use crate::error::AppError;
 
 #[derive(Clone)]
-pub struct TemplatesRepository {
+pub struct TemplateRepository {
     pool: Pool,
 }
 
-impl TemplatesRepository {
+impl TemplateRepository {
     pub fn new(pool: Pool) -> Self {
         Self { pool }
     }

@@ -3,16 +3,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::enums::StatusEnum;
+use crate::enums::Status;
 use crate::error::{AppError, AppResult};
 use crate::models::{CreateSourceRequest, PatchMetadataRequest, SourceData};
 use crate::repository::SourceRepository;
 
 #[async_trait]
-pub trait SourcesServiceTrait: Send + Sync {
+pub trait SourceTrait: Send + Sync {
     async fn load(&self) -> anyhow::Result<()>;
     async fn get(&self, code: &str) -> Option<SourceData>;
     async fn get_by_code(&self, code: &str) -> AppResult<Option<SourceData>>;
+    async fn must_active(&self, code: &str) -> Result<SourceData, String>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<SourceData>;
     async fn create(&self, req: CreateSourceRequest) -> AppResult<()>;
     async fn patch_metadata(&self, req: PatchMetadataRequest) -> AppResult<()>;
@@ -34,7 +35,7 @@ impl SourceService {
 }
 
 #[async_trait]
-impl SourcesServiceTrait for SourceService {
+impl SourceTrait for SourceService {
     async fn load(&self) -> anyhow::Result<()> {
         let rows = self.repo.list().await?;
 
@@ -71,17 +72,27 @@ impl SourcesServiceTrait for SourceService {
     }
 
     async fn get_active_by_id(&self, id: i32) -> AppResult<SourceData> {
-        match self.repo.find_by_id(&key).await {
+        match self.repo.find_by_id(id).await {
             Ok(Some(s)) => {
-                self.cache.write().await.insert(key, s.clone());
-                active_source(s, code)
+                self.cache.write().await.insert(s.code.clone(), s.clone());
+                active_source(s, id).map_err(AppError::bad_request)
             }
-            Ok(None) => Err(format!("unknown source `{code}`")),
+            Ok(None) => Err(AppError::not_found(format!("unknown source id `{id}`"))),
             Err(err) => {
-                tracing::error!(error = %err, code, "load source failed");
-                Err(format!("failed to load source `{code}`: {err}"))
+                tracing::error!(error = %err, id, "load source failed");
+                Err(err)
             }
         }
+    }
+
+    async fn must_active(&self, code: &str) -> Result<SourceData, String> {
+        let source = self
+            .get_by_code(code)
+            .await
+            .map_err(|err| err.to_string())?
+            .ok_or_else(|| format!("unknown source `{code}`"))?;
+        let id = source.id;
+        active_source(source, id)
     }
 
     async fn create(&self, req: CreateSourceRequest) -> AppResult<()> {
@@ -119,12 +130,10 @@ impl SourcesServiceTrait for SourceService {
     }
 }
 
-fn active_source(s: SourceData, code: &str) -> Result<SourceData, String> {
-    if s.status
-        .eq_ignore_ascii_case(StatusEnum::Active.as_str())
-    {
+fn active_source(s: SourceData, id: i32) -> Result<SourceData, String> {
+    if s.status.eq_ignore_ascii_case(Status::Active.as_str()) {
         Ok(s)
     } else {
-        Err(format!("source `{code}` is not ACTIVE"))
+        Err(format!("source id `{id}` is not ACTIVE"))
     }
 }

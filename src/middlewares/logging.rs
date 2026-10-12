@@ -1,4 +1,4 @@
-use crate::models::ApiResponse as ApiResponse;
+use crate::models::ApiResponse;
 use axum::{
     body::Body,
     extract::Request,
@@ -42,9 +42,8 @@ pub async fn logging_middleware(request: Request, next: Next) -> Response {
     let path = request.uri().path().to_owned();
 
     let headers = request.headers();
-    let ctx = RequestContext::from_headers(
-        headers.get("x-request-id").and_then(|v| v.to_str().ok()),
-    );
+    let ctx =
+        RequestContext::from_headers(headers.get("x-request-id").and_then(|v| v.to_str().ok()));
     let request_id = ctx.request_id.clone();
     let span = info_span!(
         "trace",

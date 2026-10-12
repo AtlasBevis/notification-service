@@ -1,5 +1,5 @@
 use crate::models::{ApiRequest, ApiResponse, CreateTemplateRequest, TemplateData};
-use crate::services::TemplatesServiceTrait;
+use crate::services::TemplateTrait;
 use crate::state::SharedState;
 use axum::extract::State;
 

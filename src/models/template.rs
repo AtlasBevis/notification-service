@@ -38,7 +38,7 @@ impl TemplateData {
         flatten_variables(variables, &mut vars);
 
         let escape_json = self.format.eq_ignore_ascii_case("ADAPTIVE_CARD");
-        
+
         let title = truncate_chars(&render_placeholders(&self.title, &vars, false), 255);
         vars.insert("title".to_string(), title.clone());
         let content = render_placeholders(&self.content, &vars, escape_json);

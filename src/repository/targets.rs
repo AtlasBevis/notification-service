@@ -4,7 +4,7 @@ use deadpool_postgres::Pool;
 use serde_json::Value;
 
 use crate::{
-    enums::StatusEnum,
+    enums::Status,
     models::{CreateTargetRequest, TargetData},
 };
 
@@ -24,8 +24,10 @@ impl TargetsRepository {
         let client = self.pool.get().await.context("postgres pool")?;
         let rows = client
             .query(
-                "SELECT code, channel_code, name, status, metadata, created_at, updated_at
-                  FROM targets",
+                "SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
+                        t.metadata, t.created_at, t.updated_at
+                 FROM targets t
+                 JOIN channels c ON c.id = t.channel_id",
                 &[],
             )
             .await
@@ -37,10 +39,27 @@ impl TargetsRepository {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT code, channel_code, name, status, metadata, created_at, updated_at
-                    FROM targets
-                    WHERE code = $1",
+                "SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
+                        t.metadata, t.created_at, t.updated_at
+                 FROM targets t
+                 JOIN channels c ON c.id = t.channel_id
+                 WHERE t.code = $1",
                 &[&code],
+            )
+            .await?;
+        Ok(row.map(|r| TargetData::map_row(&r)))
+    }
+
+    pub async fn find_by_id(&self, id: i32) -> Result<Option<TargetData>, AppError> {
+        let client = self.pool.get().await?;
+        let row = client
+            .query_opt(
+                "SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
+                        t.metadata, t.created_at, t.updated_at
+                 FROM targets t
+                 JOIN channels c ON c.id = t.channel_id
+                 WHERE t.id = $1",
+                &[&id],
             )
             .await?;
         Ok(row.map(|r| TargetData::map_row(&r)))
@@ -51,14 +70,20 @@ impl TargetsRepository {
 
         let row = client
             .query_one(
-                "INSERT INTO targets (code, channel_code, name, status, metadata, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6)
-                 RETURNING code, channel_code, name, status, metadata, created_at, updated_at",
+                "WITH inserted AS (
+                    INSERT INTO targets (code, channel_id, name, status, metadata, updated_at)
+                    VALUES ($1, (SELECT id FROM channels WHERE code = $2), $3, $4, $5, $6)
+                    RETURNING id, code, channel_id, name, status, metadata, created_at, updated_at
+                 )
+                 SELECT i.id, i.code, c.code AS channel_code, i.name, i.status,
+                        i.metadata, i.created_at, i.updated_at
+                 FROM inserted i
+                 JOIN channels c ON c.id = i.channel_id",
                 &[
                     &req.code,
                     &req.channel_code,
                     &req.name,
-                    &StatusEnum::Active.as_str(),
+                    &Status::Active.as_str(),
                     &Value::Object(req.metadata.clone()),
                     &Utc::now(),
                 ],

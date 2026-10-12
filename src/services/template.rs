@@ -3,27 +3,27 @@ use serde_json::Value;
 
 use crate::error::{AppError, AppResult};
 use crate::models::{CreateTemplateRequest, TemplateData};
-use crate::repository::TemplatesRepository;
+use crate::repository::TemplateRepository;
 
 #[async_trait]
-pub trait TemplatesServiceTrait: Send + Sync {
+pub trait TemplateTrait: Send + Sync {
     async fn must_active_by_id(&self, id: i64) -> Result<TemplateData, String>;
     async fn create(&self, req: CreateTemplateRequest) -> AppResult<TemplateData>;
 }
 
 #[derive(Clone)]
-pub struct TemplatesService {
-    repo: TemplatesRepository,
+pub struct TemplateService {
+    repo: TemplateRepository,
 }
 
-impl TemplatesService {
-    pub fn new(repo: TemplatesRepository) -> Self {
+impl TemplateService {
+    pub fn new(repo: TemplateRepository) -> Self {
         Self { repo }
     }
 }
 
 #[async_trait]
-impl TemplatesServiceTrait for TemplatesService {
+impl TemplateTrait for TemplateService {
     async fn must_active_by_id(&self, id: i64) -> Result<TemplateData, String> {
         match self.repo.find_by_id(id).await {
             Ok(Some(t)) => is_active(t, id),

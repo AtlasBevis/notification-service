@@ -10,9 +10,7 @@ CREATE TABLE delivery_attempts (
   finished_at       timestamptz,
   error_message     TEXT,
 
-  CONSTRAINT uq_delivery_attempts UNIQUE (delivery_id, attempt_no),
-  CONSTRAINT chk_delivery_attempts_status
-    CHECK (status IN ('PROCESSING', 'SUCCESS', 'FAILED', 'TIMEOUT'))
+  CONSTRAINT uq_delivery_attempts UNIQUE (delivery_id, attempt_no)
 );
 
 CREATE INDEX idx_delivery_attempts_delivery

@@ -5,15 +5,15 @@ use crate::models::{
 };
 use crate::repository::NotificationsRepository;
 use crate::services::{
-    ChannelsService, ChannelsServiceTrait, SourceService, SourcesServiceTrait, TargetsService,
-    TargetsServiceTrait, TemplatesService, TemplatesServiceTrait,
+    ChannelService, ChannelTrait, SourceService, SourceTrait, TargetTrait, TargetsService,
+    TemplateService, TemplateTrait,
 };
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Arc;
 
 #[async_trait]
-pub trait NotificationServiceTrait: Send + Sync {
+pub trait NotificationTrait: Send + Sync {
     async fn create(&self, req: CreateNotificationRequest) -> AppResult<NotificationData>;
     async fn list(&self) -> AppResult<Vec<NotificationData>>;
     async fn get_by_code(&self, code: &str) -> AppResult<NotificationData>;
@@ -30,8 +30,8 @@ pub struct NotificationService {
     notifications: NotificationsRepository,
     sources: Arc<SourceService>,
     targets: Arc<TargetsService>,
-    channels: Arc<ChannelsService>,
-    templates: Arc<TemplatesService>,
+    channels: Arc<ChannelService>,
+    templates: Arc<TemplateService>,
 }
 
 impl NotificationService {
@@ -39,8 +39,8 @@ impl NotificationService {
         notifications: NotificationsRepository,
         sources: Arc<SourceService>,
         targets: Arc<TargetsService>,
-        channels: Arc<ChannelsService>,
-        templates: Arc<TemplatesService>,
+        channels: Arc<ChannelService>,
+        templates: Arc<TemplateService>,
     ) -> Self {
         Self {
             notifications,
@@ -80,7 +80,7 @@ impl NotificationService {
         template_id: i64,
     ) -> AppResult<()> {
         self.sources
-            .get_active_by_id(source_code)
+            .must_active(source_code)
             .await
             .map_err(AppError::bad_request)?;
         self.channels
@@ -107,7 +107,7 @@ impl NotificationService {
 }
 
 #[async_trait]
-impl NotificationServiceTrait for NotificationService {
+impl NotificationTrait for NotificationService {
     async fn create(&self, req: CreateNotificationRequest) -> AppResult<NotificationData> {
         self.ensure_destination(
             &req.source_code,

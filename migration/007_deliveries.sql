@@ -22,10 +22,7 @@ CREATE TABLE deliveries (
   last_error_message TEXT,
   sent_at           timestamptz,
 
-  CONSTRAINT uq_deliveries_notification UNIQUE (notification_id),
-  CONSTRAINT chk_deliveries_status
-    CHECK (status IN ('PENDING', 'PROCESSING', 'RETRY_WAIT', 'SENT', 'FAILED')),
-  CONSTRAINT chk_deliveries_attempt_count CHECK (attempt_count >= 0)
+  CONSTRAINT uq_deliveries_notification UNIQUE (notification_id)
 );
 
 CREATE INDEX idx_deliveries_pending ON deliveries (next_retry_at, id)

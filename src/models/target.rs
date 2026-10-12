@@ -6,6 +6,7 @@ use crate::utils::json::get_string;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetData {
+    pub id: i32,
     pub code: String,
     pub channel_code: String,
     pub name: String,
@@ -18,6 +19,7 @@ pub struct TargetData {
 impl TargetData {
     pub fn map_row(row: &tokio_postgres::Row) -> Self {
         Self {
+            id: row.get("id"),
             code: row.get("code"),
             channel_code: row.get("channel_code"),
             name: row.get("name"),

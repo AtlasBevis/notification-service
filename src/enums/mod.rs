@@ -1,5 +1,7 @@
 mod channel;
+mod method;
 mod status;
 
-pub use channel::ChannelEnum;
-pub use status::StatusEnum;
+pub use channel::Channel;
+pub use method::Method;
+pub use status::Status;

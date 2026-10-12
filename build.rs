@@ -6,9 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     prost_config.protoc_executable(protoc);
     tonic_prost_build::configure().compile_with_config(
         prost_config,
-        &[
-            "proto/notification.proto"
-        ],
+        &["proto/notification.proto"],
         &["proto"],
     )?;
     Ok(())

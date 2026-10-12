@@ -1,5 +1,7 @@
-use crate::models::{ApiRequest, ApiResponse, CreateSourceRequest, PatchMetadataRequest, SourceData};
-use crate::services::SourcesServiceTrait;
+use crate::models::{
+    ApiRequest, ApiResponse, CreateSourceRequest, PatchMetadataRequest, SourceData,
+};
+use crate::services::SourceTrait;
 use crate::state::SharedState;
 use axum::extract::{Path, State};
 

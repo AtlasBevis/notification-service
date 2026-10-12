@@ -1,21 +1,10 @@
-use chrono::Utc;
 use deadpool_postgres::Pool;
-use serde_json::Value;
-use tokio_postgres::error::SqlState;
-use uuid::Uuid;
 
-use crate::{
-    enums::StatusEnum,
-    error::AppResult,
-    models::{
-        AcceptedNotification, CreateNotificationRequest, DefinitionData, DeliveryDraft,
-        NotificationData, UpdateNotificationRequest,
-    },
-};
+use crate::{error::AppResult, models::DefinitionData};
 
 use crate::error::AppError;
 
-const COLUMNS: &str = "id, code, name, status, description, source_code, channel_code, target_code, template_id, level, created_at, updated_at";
+const COLUMNS: &str = "id, code, name, status, description, level, source_id, channel_id, target_id, template_id, created_at, updated_at";
 
 #[derive(Clone)]
 pub struct DefinitionRepository {
@@ -43,7 +32,7 @@ impl DefinitionRepository {
         }
     }
 
-    pub async fn find_by_id(&self, id: i32) -> AppResult<DefinitionData> {
+    pub async fn find_by_id(&self, id: i64) -> AppResult<DefinitionData> {
         let client = self.pool.get().await?;
         let sql = format!("SELECT {COLUMNS} FROM definitions WHERE id = $1");
         match client.query_opt(sql.as_str(), &[&id]).await? {

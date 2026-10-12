@@ -3,16 +3,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::enums::StatusEnum;
+use crate::enums::Status;
 use crate::error::{AppError, AppResult};
 use crate::models::{CreateTargetRequest, PatchMetadataRequest, TargetData};
 use crate::repository::TargetsRepository;
 
 #[async_trait]
-pub trait TargetsServiceTrait: Send + Sync {
+pub trait TargetTrait: Send + Sync {
     async fn load(&self) -> anyhow::Result<()>;
     async fn get(&self, code: &str) -> Option<TargetData>;
     async fn get_by_code(&self, code: &str) -> AppResult<Option<TargetData>>;
+    async fn must_active(&self, code: &str) -> Result<TargetData, String>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData>;
     async fn create(&self, req: CreateTargetRequest) -> AppResult<()>;
     async fn patch_metadata(&self, req: PatchMetadataRequest) -> AppResult<()>;
@@ -34,7 +35,7 @@ impl TargetsService {
 }
 
 #[async_trait]
-impl TargetsServiceTrait for TargetsService {
+impl TargetTrait for TargetsService {
     async fn load(&self) -> anyhow::Result<()> {
         let rows = self.repo.list().await?;
 
@@ -71,22 +72,26 @@ impl TargetsServiceTrait for TargetsService {
     }
 
     async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData> {
-        let key = code.trim().to_ascii_uppercase();
-        if let Some(t) = self.get(&key).await {
-            return active_target(t, code);
-        }
-
-        match self.repo.find_by_code(&key).await {
+        match self.repo.find_by_id(id).await {
             Ok(Some(t)) => {
-                self.cache.write().await.insert(key, t.clone());
-                active_target(t, code)
+                self.cache.write().await.insert(t.code.clone(), t.clone());
+                active_target(t, &format!("id `{id}`")).map_err(AppError::bad_request)
             }
-            Ok(None) => Err(format!("unknown target `{code}`")),
+            Ok(None) => Err(AppError::not_found(format!("unknown target id `{id}`"))),
             Err(err) => {
-                tracing::error!(error = %err, code, "load target failed");
-                Err(format!("failed to load target `{code}`: {err}"))
+                tracing::error!(error = %err, id, "load target failed");
+                Err(err)
             }
         }
+    }
+
+    async fn must_active(&self, code: &str) -> Result<TargetData, String> {
+        let target = self
+            .get_by_code(code)
+            .await
+            .map_err(|err| err.to_string())?
+            .ok_or_else(|| format!("unknown target `{code}`"))?;
+        active_target(target, &format!("`{code}`"))
     }
 
     async fn create(&self, req: CreateTargetRequest) -> AppResult<()> {
@@ -124,10 +129,10 @@ impl TargetsServiceTrait for TargetsService {
     }
 }
 
-fn active_target(t: TargetData, code: &str) -> Result<TargetData, String> {
-    if t.status.eq_ignore_ascii_case(StatusEnum::Active.as_str()) {
+fn active_target(t: TargetData, label: &str) -> Result<TargetData, String> {
+    if t.status.eq_ignore_ascii_case(Status::Active.as_str()) {
         Ok(t)
     } else {
-        Err(format!("target `{code}` is not ACTIVE"))
+        Err(format!("target {label} is not ACTIVE"))
     }
 }

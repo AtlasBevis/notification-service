@@ -1,19 +1,18 @@
 use crate::config;
-use crate::enums::StatusEnum;
 use crate::error::{AppError, AppResult};
 use crate::infras::http::HttpClient;
 use crate::infras::kafka::KafkaBus;
 use crate::models::{
-    DeliveryDraft, NotificationData, NotifyMessage, NotifyRequest, NotifyValue, EVENT_TYPE_SEND,
+    DefinitionData, DeliveryDraft, NotifyMessage, NotifyRequest, NotifyValue, TargetData,
+    EVENT_TYPE_SEND,
 };
-use crate::repository::{DefinitionRepository, DeliveriesRepository};
-use crate::services::definitions::{DefinitionService, DefinitionServiceTrait};
+use crate::repository::{DeliveriesRepository, WebhookRepository};
+use crate::services::definition::{DefinitionService, DefinitionTrait};
 use crate::services::notification::NotificationService;
-use crate::services::templates::wrap_teams_message;
+use crate::services::template::wrap_teams_message;
 use crate::services::{
-    ChannelsService, ChannelsServiceTrait, NotificationServiceTrait, SourceService,
-    SourcesServiceTrait, TargetsService, TargetsServiceTrait, TemplatesService,
-    TemplatesServiceTrait,
+    ChannelService, ChannelTrait, SourceService, SourceTrait, TargetTrait, TargetsService,
+    TemplateService, TemplateTrait, WebhookServiceTrait,
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -28,7 +27,7 @@ use tokio::time::sleep;
 const MAX_ATTEMPTS: u32 = 3;
 
 #[async_trait]
-pub trait NotifyServiceTrait: Send + Sync {
+pub trait NotifyTrait: Send + Sync {
     async fn validate(&self, request: NotifyRequest) -> AppResult<NotifyMessage>;
     async fn notify(&self, message: NotifyMessage) -> AppResult<()>;
 }
@@ -39,11 +38,13 @@ pub struct NotifyService {
     http: Arc<HttpClient>,
     definitions: Arc<DefinitionService>,
     sources: Arc<SourceService>,
-    channels: Arc<ChannelsService>,
+    channels: Arc<ChannelService>,
     targets: Arc<TargetsService>,
     notifications: Arc<NotificationService>,
     deliveries: DeliveriesRepository,
-    templates: Arc<TemplatesService>,
+    webhook_configs: WebhookRepository,
+    webhooks: Arc<dyn WebhookServiceTrait>,
+    templates: Arc<TemplateService>,
 }
 
 impl NotifyService {
@@ -53,10 +54,12 @@ impl NotifyService {
         definitions: Arc<DefinitionService>,
         notifications: Arc<NotificationService>,
         deliveries: DeliveriesRepository,
+        webhook_configs: WebhookRepository,
+        webhooks: Arc<dyn WebhookServiceTrait>,
         sources: Arc<SourceService>,
         targets: Arc<TargetsService>,
-        channels: Arc<ChannelsService>,
-        templates: Arc<TemplatesService>,
+        channels: Arc<ChannelService>,
+        templates: Arc<TemplateService>,
     ) -> Self {
         Self {
             kafka,
@@ -64,6 +67,8 @@ impl NotifyService {
             definitions,
             notifications,
             deliveries,
+            webhook_configs,
+            webhooks,
             sources,
             targets,
             channels,
@@ -122,39 +127,39 @@ impl NotifyService {
             }
         };
         let delivery_id = msg.value.delivery_id;
+        let max_attempts = self.max_attempts_for(&msg.value).await;
         match self
-            .retry_dispatch(topic, || self.dispatch_send(&msg.value))
+            .retry_dispatch(topic, delivery_id, max_attempts, || {
+                self.dispatch_send(&msg.value)
+            })
             .await
         {
-            Ok(()) => {
-                if let Err(err) = self
-                    .deliveries
-                    .record_result(delivery_id, "SENT", None)
-                    .await
-                {
-                    tracing::error!(error = %err, delivery_id, "record SENT failed");
-                }
-            }
-            Err(err) => {
-                if let Err(db) = self
-                    .deliveries
-                    .record_result(delivery_id, "FAILED", Some(&err))
-                    .await
-                {
-                    tracing::error!(error = %db, delivery_id, "record FAILED failed");
-                }
-            }
+            Ok(()) => {}
+            Err(err) => tracing::error!(error = %err, delivery_id, "delivery failed"),
         }
     }
 
-    async fn retry_dispatch<F, Fut>(&self, topic: &str, dispatch: F) -> Result<(), String>
+    async fn retry_dispatch<F, Fut>(
+        &self,
+        topic: &str,
+        delivery_id: i64,
+        max_attempts: u32,
+        dispatch: F,
+    ) -> Result<(), String>
     where
         F: Fn() -> Fut,
         Fut: std::future::Future<Output = Result<()>>,
     {
-        for attempt in 1..=MAX_ATTEMPTS {
+        for attempt in 1..=max_attempts.max(1) {
             match dispatch().await {
                 Ok(()) => {
+                    if let Err(err) = self
+                        .deliveries
+                        .record_attempt(delivery_id, "SENT", "SUCCESS", None)
+                        .await
+                    {
+                        tracing::error!(error = %err, delivery_id, "record successful attempt failed");
+                    }
                     metrics::counter!(
                         "notification_consumed_total",
                         "topic" => topic.to_owned(),
@@ -163,11 +168,37 @@ impl NotifyService {
                     .increment(1);
                     return Ok(());
                 }
-                Err(err) if attempt < MAX_ATTEMPTS => {
+                Err(err) if attempt < max_attempts => {
+                    let error = err.to_string();
+                    let attempt_status = if error.contains("timed out") {
+                        "TIMEOUT"
+                    } else {
+                        "FAILED"
+                    };
+                    if let Err(db) = self
+                        .deliveries
+                        .record_attempt(delivery_id, "RETRY_WAIT", attempt_status, Some(&error))
+                        .await
+                    {
+                        tracing::error!(error = %db, delivery_id, "record retry attempt failed");
+                    }
                     tracing::warn!(attempt, error = %err, "Dispatch failed; retrying");
                     sleep(Duration::from_millis(200 * u64::from(attempt))).await;
                 }
                 Err(err) => {
+                    let error = err.to_string();
+                    let attempt_status = if error.contains("timed out") {
+                        "TIMEOUT"
+                    } else {
+                        "FAILED"
+                    };
+                    if let Err(db) = self
+                        .deliveries
+                        .record_attempt(delivery_id, "FAILED", attempt_status, Some(&error))
+                        .await
+                    {
+                        tracing::error!(error = %db, delivery_id, "record failed attempt failed");
+                    }
                     tracing::error!(error = %err, "Dispatch exhausted retries");
                     metrics::counter!(
                         "notification_consumed_total",
@@ -180,6 +211,31 @@ impl NotifyService {
             }
         }
         Err("dispatch failed".into())
+    }
+
+    async fn max_attempts_for(&self, request: &NotifyValue) -> u32 {
+        if !request.channel.eq_ignore_ascii_case("WEBHOOK") {
+            return MAX_ATTEMPTS;
+        }
+        let result = async {
+            let channel = self
+                .channels
+                .must_active(&request.channel)
+                .await
+                .map_err(AppError::bad_request)?;
+            self.webhook_configs
+                .find_by_channel_id(channel.id)
+                .await
+                .map(|config| config.max_retries.saturating_add(1))
+        }
+        .await;
+        match result {
+            Ok(attempts) => attempts.max(1),
+            Err(err) => {
+                tracing::warn!(error = %err, "Could not resolve webhook retry policy");
+                1
+            }
+        }
     }
 
     pub async fn dispatch_send(&self, request: &NotifyValue) -> Result<()> {
@@ -319,73 +375,82 @@ impl NotifyService {
     }
 
     async fn send_webhook(&self, request: &NotifyValue) -> Result<()> {
-        let target = self
-            .targets
+        self.targets
             .must_active(&request.target)
             .await
             .map_err(|msg| anyhow::anyhow!(msg))?;
-        let url = target.teams_webhook_url().ok_or_else(|| {
-            anyhow::anyhow!(
-                "target `{}` metadata.url is required for WEBHOOK",
-                request.target
-            )
-        })?;
-        let body = serde_json::json!({
-            "code": request.code,
-            "source": request.source,
-            "trace_id": request.trace_id,
-            "level": request.kind,
-            "title": request.title,
-            "data": request.payload,
-        });
-        self.http.post_json(&url, &HashMap::new(), &body).await?;
+        let channel = self
+            .channels
+            .must_active(&request.channel)
+            .await
+            .map_err(|msg| anyhow::anyhow!(msg))?;
+        let config = self.webhook_configs.find_by_channel_id(channel.id).await?;
+        self.webhooks
+            .send_webhook(&config, &request.payload)
+            .await?;
         Ok(())
     }
 
     async fn build_notify_message(
         &self,
         request: &NotifyRequest,
-        definition: &NotificationData,
+        definition: &DefinitionData,
+        source_code: &str,
+        channel_code: &str,
+        target: &TargetData,
     ) -> Result<NotifyMessage, String> {
         let template = self
             .templates
-            .must_active_by_id(definition.template_id)
+            .must_active_by_id(i64::from(definition.template_id))
             .await?;
 
         let recipients = target.recipients();
-        if definition.channel_code.eq_ignore_ascii_case("EMAIL") && !recipients.has_to() {
+        if channel_code.eq_ignore_ascii_case("EMAIL") && !recipients.has_to() {
             return Err(format!(
                 "target `{}` metadata.to is required for EMAIL channel",
-                definition.target_code
+                target.code
             ));
         }
 
         let (title, message) = template.merge_template(&request.variables);
         Ok(NotifyMessage::new(request)
-            .with_definition(definition, template.name, recipients)
+            .with_definition(
+                definition,
+                source_code,
+                channel_code,
+                &target.code,
+                template.name,
+                recipients,
+            )
             .with_rendered(title, message))
     }
 }
 
 #[async_trait]
-impl NotifyServiceTrait for NotifyService {
+impl NotifyTrait for NotifyService {
     async fn validate(&self, request: NotifyRequest) -> AppResult<NotifyMessage> {
         // definitions
-        let def = self.definitions.get_active_by_code(&request.code).await?;
+        let definition = self.definitions.get_active_by_code(&request.code).await?;
 
         // sources
-        let source = self.sources.get_active_by_id(def.source_id).await?;
+        let source = self.sources.get_active_by_id(definition.source_id).await?;
 
         // channels
-        let channels = self.channels.get_active_by_id(def.channel_id).await?;
+        let channel = self
+            .channels
+            .get_active_by_id(definition.channel_id)
+            .await?;
 
         // target
-        let target = self.targets.get_active_by_id(def.target_id).await?;
+        let target = self.targets.get_active_by_id(definition.target_id).await?;
+        if !target.channel_code.eq_ignore_ascii_case(&channel.code) {
+            return Err(AppError::bad_request(format!(
+                "target `{}` does not belong to channel `{}`",
+                target.code, channel.code
+            )));
+        }
 
-        let templates = self.templates.get_active_by_id(def.template_id).await?;
-
-        // templates
-        self.build_notify_message(&request, &definition)
+        self.build_notify_message(&request, &definition, &source.code, &channel.code, &target)
             .await
             .map_err(AppError::bad_request)
     }

@@ -6,11 +6,11 @@ use crate::models::ChannelData;
 use crate::error::AppError;
 
 #[derive(Clone)]
-pub struct ChannelsRepository {
+pub struct ChannelRepository {
     pool: Pool,
 }
 
-impl ChannelsRepository {
+impl ChannelRepository {
     pub fn new(pool: Pool) -> Self {
         Self { pool }
     }
@@ -19,7 +19,7 @@ impl ChannelsRepository {
         let client = self.pool.get().await.context("postgres pool")?;
         let rows = client
             .query(
-                "SELECT code, name, status, metadata, created_at, updated_at
+                "SELECT id, code, name, status, metadata, created_at, updated_at
                  FROM channels",
                 &[],
             )
@@ -33,7 +33,7 @@ impl ChannelsRepository {
         let key = code.trim().to_ascii_uppercase();
         let row = client
             .query_opt(
-                "SELECT code, name, status, metadata, created_at, updated_at
+                "SELECT id, code, name, status, metadata, created_at, updated_at
                  FROM channels WHERE code = $1",
                 &[&key],
             )
@@ -41,14 +41,13 @@ impl ChannelsRepository {
         Ok(row.map(|r| ChannelData::map_row(&r)))
     }
 
-    pub async fn find_by_id(&self, code: &str) -> Result<Option<ChannelData>, AppError> {
+    pub async fn find_by_id(&self, id: i32) -> Result<Option<ChannelData>, AppError> {
         let client = self.pool.get().await?;
-        let key = code.trim().to_ascii_uppercase();
         let row = client
             .query_opt(
-                "SELECT code, name, status, metadata, created_at, updated_at
-                 FROM channels WHERE code = $1",
-                &[&key],
+                "SELECT id, code, name, status, metadata, created_at, updated_at
+                 FROM channels WHERE id = $1",
+                &[&id],
             )
             .await?;
         Ok(row.map(|r| ChannelData::map_row(&r)))

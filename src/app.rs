@@ -76,7 +76,9 @@ pub async fn run_notification_consumer() -> Result<()> {
     tracing::info!(version = %config.server.version, "Config loaded");
 
     if !config.kafka.consumer_enabled() {
-        anyhow::bail!("kafka.enabled and kafka.consumer.enabled must be true for notification-consumer");
+        anyhow::bail!(
+            "kafka.enabled and kafka.consumer.enabled must be true for notification-consumer"
+        );
     }
 
     metrics::init(&config.server)?;

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::enums::StatusEnum;
+use crate::enums::Status;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationData {
@@ -148,8 +148,8 @@ impl UpdateNotificationRequest {
         if self.name.is_empty() {
             return Err("name is required".into());
         }
-        match StatusEnum::parse(&self.status) {
-            Some(StatusEnum::Active | StatusEnum::Inactive) => {}
+        match Status::parse(&self.status) {
+            Some(Status::Active | Status::Inactive) => {}
             _ => return Err("status must be ACTIVE or INACTIVE".into()),
         }
         if self.source_code.is_empty() {

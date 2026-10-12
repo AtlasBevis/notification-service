@@ -9,13 +9,13 @@ CREATE TABLE definitions (
   code              VARCHAR(50)  NOT NULL UNIQUE,
   name              VARCHAR(255) NOT NULL,
   description       VARCHAR(255),
-  status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE'
+  status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
   level             VARCHAR(20)  NOT NULL DEFAULT 'INFO',
   
   source_id         INT   NOT NULL REFERENCES sources (id),
   channel_id        INT   NOT NULL REFERENCES channels (id),
   target_id         INT   NOT NULL REFERENCES targets (id),
-  template_id       INT   NOT NULL REFERENCES templates (id),
+  template_id       INT   NOT NULL REFERENCES templates (id)
 );
 
 -- INSERT INTO definitions (

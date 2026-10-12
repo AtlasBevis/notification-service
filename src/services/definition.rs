@@ -1,11 +1,11 @@
-use crate::enums::StatusEnum;
+use crate::enums::Status;
 use crate::error::{AppError, AppResult};
 use crate::models::DefinitionData;
 use crate::repository::DefinitionRepository;
 use async_trait::async_trait;
 
 #[async_trait]
-pub trait DefinitionServiceTrait: Send + Sync {
+pub trait DefinitionTrait: Send + Sync {
     // async fn create(&self, req: CreateNotificationRequest) -> AppResult<NotificationData>;
     // async fn list(&self) -> AppResult<Vec<NotificationData>>;
     async fn get_by_code(&self, code: &str) -> AppResult<DefinitionData>;
@@ -30,7 +30,7 @@ impl DefinitionService {
 }
 
 #[async_trait]
-impl DefinitionServiceTrait for DefinitionService {
+impl DefinitionTrait for DefinitionService {
     async fn get_by_code(&self, code: &str) -> AppResult<DefinitionData> {
         match self.repo.find_by_code(code).await {
             Ok(d) => Ok(d),
@@ -43,7 +43,7 @@ impl DefinitionServiceTrait for DefinitionService {
 
     async fn get_active_by_code(&self, code: &str) -> AppResult<DefinitionData> {
         let d = self.get_by_code(code).await?;
-        if StatusEnum::ACTIVE.as_str() != d.status {
+        if Status::Active.as_str() != d.status {
             return Err(AppError::bad_request(format!(
                 "definition `{code}` is not ACTIVE",
             )));

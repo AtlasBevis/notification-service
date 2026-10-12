@@ -4,7 +4,8 @@ use deadpool_postgres::Pool;
 use serde_json::Value;
 
 use crate::{
-    enums::StatusEnum, error::AppResult, models::{CreateSourceRequest, SourceData},
+    enums::Status,
+    models::{CreateSourceRequest, SourceData},
 };
 
 use crate::error::AppError;
@@ -23,7 +24,7 @@ impl SourceRepository {
         let client = self.pool.get().await.context("postgres pool")?;
         let rows = client
             .query(
-                "SELECT code, name, status, metadata, created_at, updated_at
+                "SELECT id, code, name, status, metadata, created_at, updated_at
                   FROM sources",
                 &[],
             )
@@ -36,7 +37,7 @@ impl SourceRepository {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT code, name, status, metadata, created_at, updated_at
+                "SELECT id, code, name, status, metadata, created_at, updated_at
                     FROM sources
                     WHERE code = $1",
                 &[&code],
@@ -45,14 +46,14 @@ impl SourceRepository {
         Ok(row.map(|r| SourceData::map_row(&r)))
     }
 
-    pub async fn find_by_id(&self, id: i32) -> AppResult<SourceData> {
+    pub async fn find_by_id(&self, id: i32) -> Result<Option<SourceData>, AppError> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT code, name, status, metadata, created_at, updated_at
+                "SELECT id, code, name, status, metadata, created_at, updated_at
                     FROM sources
-                    WHERE code = $1",
-                &[&code],
+                    WHERE id = $1",
+                &[&id],
             )
             .await?;
         Ok(row.map(|r| SourceData::map_row(&r)))
@@ -65,11 +66,11 @@ impl SourceRepository {
             .query_one(
                 "INSERT INTO sources (code, name, status, metadata, updated_at)
                  VALUES ($1, $2, $3, $4, $5)
-                 RETURNING code, name, status, metadata, created_at, updated_at",
+                 RETURNING id, code, name, status, metadata, created_at, updated_at",
                 &[
                     &req.code,
                     &req.name,
-                    &StatusEnum::Active.as_str(),
+                    &Status::Active.as_str(),
                     &Value::Object(req.metadata.clone()),
                     &Utc::now(),
                 ],
