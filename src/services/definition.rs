@@ -6,16 +6,8 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait DefinitionTrait: Send + Sync {
-    // async fn create(&self, req: CreateNotificationRequest) -> AppResult<NotificationData>;
-    // async fn list(&self) -> AppResult<Vec<NotificationData>>;
     async fn get_by_code(&self, code: &str) -> AppResult<DefinitionData>;
     async fn get_active_by_code(&self, code: &str) -> AppResult<DefinitionData>;
-    // async fn update(
-    //     &self,
-    //     code: &str,
-    //     req: UpdateNotificationRequest,
-    // ) -> AppResult<NotificationData>;
-    // async fn delete(&self, code: &str) -> AppResult<()>;
 }
 
 #[derive(Clone)]

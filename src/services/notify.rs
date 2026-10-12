@@ -342,7 +342,7 @@ impl NotifyTrait for NotifyService {
         let source_code = msg.value.source.clone();
         let code = msg.value.code.clone();
         let definition_id = msg.value.definition_id;
-        let idempotency_key = msg.value.trace_id.clone();
+        let trace_id = msg.value.trace_id.clone();
         let variables = Value::Object(msg.value.variables.clone());
         let drafts = vec![DeliveryDraft {
             target_code: msg.value.target.clone(),
@@ -360,7 +360,7 @@ impl NotifyTrait for NotifyService {
                 definition_id,
                 &source_code,
                 &code,
-                &idempotency_key,
+                &trace_id,
                 &variables,
                 &drafts,
             )
@@ -369,7 +369,7 @@ impl NotifyTrait for NotifyService {
             Ok(row) => row,
             Err(AppError::Conflict(_)) => {
                 return Err(AppError::conflict(format!(
-                    "notification `{code}` already accepted for trace `{idempotency_key}`"
+                    "notification `{code}` already accepted for trace `{trace_id}`"
                 )));
             }
             Err(err) => {

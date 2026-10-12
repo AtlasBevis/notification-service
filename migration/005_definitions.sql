@@ -14,6 +14,6 @@ CREATE TABLE definitions (
   
   source_id         INT   NOT NULL REFERENCES sources (id),
   channel_id        INT   NOT NULL REFERENCES channels (id),
-  target_id         INT   NOT NULL REFERENCES targets (id),
-  template_id       INT   NOT NULL REFERENCES templates (id)
+  target_id         INT   REFERENCES targets (id),
+  template_id       INT   REFERENCES templates (id)
 );
