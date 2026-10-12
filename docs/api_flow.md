@@ -10,7 +10,8 @@
 | `channels` | Delivery types: `EMAIL`, `MSTEAMS`, `WEBHOOK` |
 | `targets` | Reusable destination groups associated with a channel |
 | `definition_targets` | Maps each definition to one or more destination groups |
-| `templates` | Message title and body, rendered with `{{key}}` |
+| `templates` | Template identity (name, status) referenced by `definitions.template_id` |
+| `template_versions` | Versioned title, body, and format (`TEXT`/`HTML` for EMAIL, `ADAPTIVE_CARD` for MSTEAMS), rendered with `{{key}}`; a send uses the latest `ACTIVE` version |
 | `webhook_configs` | Webhook endpoint, method, timeout, and retry configuration; one row per WEBHOOK target |
 | `definitions` | Maps a caller `code` to its source, channel, selected targets, and template |
 | `notifications` | Runtime record for an accepted send request |
@@ -112,6 +113,6 @@ Webhook method and timeout come from `webhook_configs`. Each webhook delivery ca
 | `POST` | `/notification/targets` | Create a target |
 | `GET` | `/notification/targets/{code}` | Read a target |
 | `PATCH` | `/notification/targets/metadata` | Update target metadata |
-| `POST` | `/notification/templates` | Create a template version |
+| `POST` | `/notification/templates` | Create a template version (creates the template on first use of `name`) |
 
 All `/notification` routes require `api-key` authentication. Notification CRUD routes are not provided.

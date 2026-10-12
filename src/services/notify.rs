@@ -264,10 +264,7 @@ impl NotifyService {
         let template_id = definition.template_id.ok_or_else(|| {
             AppError::bad_request(format!("definition `{}` has no template", definition.code))
         })?;
-        let template = self
-            .templates
-            .get_active_by_id(i64::from(template_id))
-            .await?;
+        let template = self.templates.get_active_by_id(template_id).await?;
 
         let mut recipients = crate::models::Recipients::default();
         for target in targets {

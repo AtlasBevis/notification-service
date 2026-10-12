@@ -20,7 +20,7 @@ Schema nằm trong [`migration/`](migration/), theo thứ tự:
 3. `targets`
 4. `webhook_configs`
 5. `webhook_auth_configs`
-6. `templates`
+6. `templates`, `template_versions`
 7. `definitions`
 8. `notifications`
 9. `deliveries`

@@ -5,6 +5,8 @@ use crate::models::{CreateTemplateRequest, TemplateData};
 
 use crate::error::AppError;
 
+const COLUMNS: &str = "t.id, t.name, t.status, v.id AS version_id, v.version, v.status AS version_status, v.title, v.content, v.format, t.created_at, t.updated_at";
+
 #[derive(Clone)]
 pub struct TemplateRepository {
     pool: Pool,
@@ -15,37 +17,31 @@ impl TemplateRepository {
         Self { pool }
     }
 
-    pub async fn find_by_id(&self, id: i64) -> Result<TemplateData, AppError> {
+    /// Template with its latest ACTIVE version.
+    pub async fn find_by_id(&self, id: i32) -> Result<TemplateData, AppError> {
         let client = self.pool.get().await?;
-        let row = client
-            .query_opt(
-                "SELECT id, name, status, title, content, format, version, created_at, updated_at
-                 FROM templates
-                 WHERE id = $1",
-                &[&id],
-            )
-            .await?;
-        let row = row.ok_or_else(|| AppError::not_found(format!("unknown template id `{id}`")))?;
+        let sql = format!(
+            "SELECT {COLUMNS}
+             FROM templates t
+             JOIN template_versions v ON v.template_id = t.id
+             WHERE t.id = $1 AND v.status = 'ACTIVE'
+             ORDER BY v.version DESC
+             LIMIT 1"
+        );
+        let row = client.query_opt(sql.as_str(), &[&id]).await?;
+        let row = row.ok_or_else(|| {
+            AppError::not_found(format!("template id `{id}` has no ACTIVE version"))
+        })?;
         TemplateData::map_row(&row)
     }
 
-    pub async fn next_version(&self, name: &str) -> Result<i32, AppError> {
-        let client = self.pool.get().await?;
-        let row = client
-            .query_one(
-                "SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM templates WHERE name = $1",
-                &[&name],
-            )
-            .await?;
-        Ok(row.get::<_, i32>("next_version"))
-    }
-
-    pub async fn insert(
+    /// Creates the template on first use of `name`, then appends the next version.
+    pub async fn insert_version(
         &self,
         req: &CreateTemplateRequest,
-        version: i32,
     ) -> Result<TemplateData, AppError> {
-        let client = self.pool.get().await?;
+        let mut client = self.pool.get().await?;
+        let tx = client.transaction().await?;
         let name = req.name.trim().to_string();
         let title = req.title.trim().to_string();
         let content = req.content.clone();
@@ -53,14 +49,40 @@ impl TemplateRepository {
         let status = req.status.trim().to_ascii_uppercase();
         let now = Utc::now();
 
-        let row = client
+        // The upsert locks the template row, so concurrent creates for one name
+        // take consecutive version numbers.
+        let template = tx
             .query_one(
-                "INSERT INTO templates (name, status, title, content, format, version, updated_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 RETURNING id, name, status, title, content, format, version, created_at, updated_at",
-                &[&name, &status, &title, &content, &format, &version, &now],
+                "INSERT INTO templates (name, updated_at)
+                 VALUES ($1, $2)
+                 ON CONFLICT (name) DO UPDATE SET updated_at = EXCLUDED.updated_at
+                 RETURNING id",
+                &[&name, &now],
             )
             .await?;
-        TemplateData::map_row(&row)
+        let template_id: i32 = template.get("id");
+
+        let version = tx
+            .query_one(
+                "INSERT INTO template_versions (template_id, version, status, title, content, format)
+                 SELECT $1, COALESCE(MAX(version), 0) + 1, $2, $3, $4, $5
+                 FROM template_versions
+                 WHERE template_id = $1
+                 RETURNING id",
+                &[&template_id, &status, &title, &content, &format],
+            )
+            .await?;
+        let version_id: i32 = version.get("id");
+
+        let sql = format!(
+            "SELECT {COLUMNS}
+             FROM templates t
+             JOIN template_versions v ON v.template_id = t.id
+             WHERE v.id = $1"
+        );
+        let row = tx.query_one(sql.as_str(), &[&version_id]).await?;
+        let data = TemplateData::map_row(&row)?;
+        tx.commit().await?;
+        Ok(data)
     }
 }

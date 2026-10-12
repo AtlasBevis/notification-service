@@ -7,7 +7,7 @@ use crate::repository::TemplateRepository;
 
 #[async_trait]
 pub trait TemplateTrait: Send + Sync {
-    async fn get_active_by_id(&self, id: i64) -> AppResult<TemplateData>;
+    async fn get_active_by_id(&self, id: i32) -> AppResult<TemplateData>;
     async fn create(&self, req: CreateTemplateRequest) -> AppResult<TemplateData>;
 }
 
@@ -24,39 +24,35 @@ impl TemplateService {
 
 #[async_trait]
 impl TemplateTrait for TemplateService {
-    async fn get_active_by_id(&self, id: i64) -> AppResult<TemplateData> {
+    async fn get_active_by_id(&self, id: i32) -> AppResult<TemplateData> {
         let t = self.repo.find_by_id(id).await?;
         is_active(t, id).map_err(AppError::bad_request)
     }
 
     async fn create(&self, req: CreateTemplateRequest) -> AppResult<TemplateData> {
-        let name = req.name.trim();
-        let version = self.repo.next_version(name).await?;
-
-        match self.repo.insert(&req, version).await {
+        match self.repo.insert_version(&req).await {
             Ok(row) => {
                 tracing::info!(
                     id = row.id,
                     name = %row.name,
                     version = row.version,
-                    "Template inserted"
+                    "Template version inserted"
                 );
                 Ok(row)
             }
             Err(AppError::Conflict(_)) => Err(AppError::conflict(format!(
-                "template `{}` version {} already exists",
-                req.name.trim(),
-                version
+                "template `{}` version already exists",
+                req.name.trim()
             ))),
             Err(err) => {
-                tracing::error!(error = %err, name = %req.name, "insert template failed");
+                tracing::error!(error = %err, name = %req.name, "insert template version failed");
                 Err(err)
             }
         }
     }
 }
 
-fn is_active(t: TemplateData, id: i64) -> Result<TemplateData, String> {
+fn is_active(t: TemplateData, id: i32) -> Result<TemplateData, String> {
     if t.status == crate::enums::Status::Active {
         Ok(t)
     } else {

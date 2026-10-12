@@ -6,15 +6,18 @@ use std::collections::HashMap;
 use crate::enums::Status;
 use crate::error::{AppError, AppResult};
 
+/// A template joined with the version selected for it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateData {
-    pub id: i64,
+    pub id: i32,
     pub name: String,
     pub status: Status,
+    pub version_id: i32,
+    pub version: i32,
+    pub version_status: Status,
     pub title: String,
     pub content: String,
     pub format: String,
-    pub version: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
@@ -22,16 +25,23 @@ pub struct TemplateData {
 impl TemplateData {
     pub fn map_row(row: &tokio_postgres::Row) -> AppResult<Self> {
         let status: String = row.get("status");
+        let version_status: String = row.get("version_status");
         Ok(Self {
             id: row.get("id"),
             name: row.get("name"),
             status: Status::parse(&status).ok_or_else(|| {
                 AppError::internal(format!("unknown status `{status}` in templates"))
             })?,
+            version_id: row.get("version_id"),
+            version: row.get("version"),
+            version_status: Status::parse(&version_status).ok_or_else(|| {
+                AppError::internal(format!(
+                    "unknown status `{version_status}` in template_versions"
+                ))
+            })?,
             title: row.get("title"),
             content: row.get("content"),
             format: row.get("format"),
-            version: row.get("version"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
             updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
         })
@@ -146,7 +156,8 @@ fn truncate_chars(s: &str, max: usize) -> String {
     s.chars().take(max).collect()
 }
 
-/// Insert-only. Same `name` always gets `version = max(version)+1`.
+/// Insert-only. Same `name` always gets a new `template_versions` row with
+/// `version = max(version)+1`; `status` applies to that version.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateTemplateRequest {
     pub name: String,

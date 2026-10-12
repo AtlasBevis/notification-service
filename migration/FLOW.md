@@ -17,7 +17,7 @@ Get-ChildItem migration\*.sql | Sort-Object Name | ForEach-Object {
 | `001_sources.sql` | Sources allowed to call the service |
 | `002_channels.sql` | Delivery channel catalog |
 | `003_targets.sql` | Reusable destination groups for EMAIL, MSTEAMS, and WEBHOOK |
-| `004_templates.sql` | Versioned message templates |
+| `004_templates.sql` | `templates` (name, status) and `template_versions` (versioned title, content, format) |
 | `005_definitions.sql` | `code` to source/channel/template mapping and definition-to-target groups |
 | `006_notifications.sql` | Accepted request and trace ID uniqueness |
 | `007_deliveries.sql` | Rendered message and current delivery state |
@@ -32,7 +32,7 @@ After the migrations, create target groups with the matching `channel_id`, then 
 ```text
 POST /notification/notify
   -> resolve active definition and configuration
-  -> render the selected template
+  -> render the template's latest ACTIVE version
   -> transactionally insert notifications + deliveries
   -> return 202 Accepted
   -> dispatch through Kafka consumer, or directly when Kafka is disabled
