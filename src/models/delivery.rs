@@ -2,13 +2,16 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::enums::{Channel, Status};
+use crate::error::{AppError, AppResult};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeliveryData {
     pub id: i64,
     pub notification_id: i64,
     pub target_code: String,
-    pub channel_code: String,
-    pub status: String,
+    pub channel_code: Channel,
+    pub status: Status,
     pub title: String,
     pub body: String,
     pub payload: Value,
@@ -19,13 +22,19 @@ pub struct DeliveryData {
 }
 
 impl DeliveryData {
-    pub fn map_row(row: &tokio_postgres::Row) -> Self {
-        Self {
+    pub fn map_row(row: &tokio_postgres::Row) -> AppResult<Self> {
+        let channel_code: String = row.get("channel_code");
+        let status: String = row.get("status");
+        Ok(Self {
             id: row.get("id"),
             notification_id: row.get("notification_id"),
             target_code: row.get("target_code"),
-            channel_code: row.get("channel_code"),
-            status: row.get("status"),
+            channel_code: Channel::parse(&channel_code).ok_or_else(|| {
+                AppError::internal(format!("unknown channel `{channel_code}` in deliveries"))
+            })?,
+            status: Status::parse(&status).ok_or_else(|| {
+                AppError::internal(format!("unknown status `{status}` in deliveries"))
+            })?,
             title: row.get("title"),
             body: row.get("body"),
             payload: row.get("payload"),
@@ -33,6 +42,6 @@ impl DeliveryData {
             attempt_count: row.get("attempt_count"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
             updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
-        }
+        })
     }
 }

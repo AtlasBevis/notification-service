@@ -28,11 +28,7 @@ impl EmailService {
 #[async_trait]
 impl EmailTrait for EmailService {
     async fn send_email(&self, request: &NotifyValue) -> AppResult<()> {
-        let channel = self
-            .channels
-            .must_active(&request.channel)
-            .await
-            .map_err(AppError::bad_request)?;
+        let channel = self.channels.get_active_by_id(request.channel_id).await?;
         let smtp = channel.smtp_config().map_err(AppError::bad_request)?;
         if request.recipients.to.is_empty() {
             return Err(AppError::bad_request(
@@ -50,8 +46,8 @@ impl EmailTrait for EmailService {
             .title
             .as_deref()
             .filter(|s| !s.is_empty())
-            .unwrap_or(request.kind.as_str());
-        let subject = format!("[{}][{}] {}", request.source, request.kind, title);
+            .unwrap_or(request.level.as_str());
+        let subject = format!("[{}][{}] {}", request.source, request.level, title);
         let text = request
             .message
             .clone()

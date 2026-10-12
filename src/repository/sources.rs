@@ -27,7 +27,10 @@ impl SourceRepository {
             )
             .await
             .context("list sources")?;
-        Ok(rows.iter().map(SourceData::map_row).collect())
+        rows.iter()
+            .map(SourceData::map_row)
+            .collect::<AppResult<Vec<_>>>()
+            .map_err(Into::into)
     }
 
     pub async fn find_by_code(&self, code: &str) -> AppResult<SourceData> {
@@ -41,7 +44,7 @@ impl SourceRepository {
             )
             .await?;
         match row {
-            Some(r) => Ok(SourceData::map_row(&r)),
+            Some(r) => SourceData::map_row(&r),
             None => Err(AppError::NotFound(format!("source `{code}` not found"))),
         }
     }
@@ -57,7 +60,7 @@ impl SourceRepository {
             )
             .await?;
         match row {
-            Some(r) => Ok(SourceData::map_row(&r)),
+            Some(r) => SourceData::map_row(&r),
             None => Err(AppError::NotFound(format!("source id `{id}` not found"))),
         }
     }
@@ -79,7 +82,7 @@ impl SourceRepository {
                 ],
             )
             .await?;
-        Ok(SourceData::map_row(&row))
+        SourceData::map_row(&row)
     }
 
     pub async fn patch_metadata(

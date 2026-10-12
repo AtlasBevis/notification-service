@@ -23,13 +23,13 @@ const TOKEN_EXPIRY_SKEW: Duration = Duration::from_secs(30);
 pub trait WebhookServiceTrait: Send + Sync {
     /// Ensures the channel has a webhook config (auth config is not loaded here).
     async fn validate(&self, channel_id: i32) -> AppResult<()>;
-    async fn get_config(&self, channel_code: &str) -> AppResult<WebhookConfig>;
+    async fn get_config(&self, channel_id: i32) -> AppResult<WebhookConfig>;
     async fn get_webhook_auth_configs(
         &self,
         webhook_config_id: i32,
     ) -> AppResult<Option<WebhookAuthConfig>>;
     /// `max_retries + 1`, from the channel's webhook config.
-    async fn max_attempts(&self, channel_code: &str) -> AppResult<u32>;
+    async fn max_attempts(&self, channel_id: i32) -> AppResult<u32>;
     async fn send_webhook(&self, request: &NotifyValue) -> AppResult<()>;
 }
 
@@ -237,7 +237,7 @@ impl WebhookService {
             .timeout(timeout)
             .json(payload);
         if let Some((name, value)) = auth_header {
-            request = request.header(name, value);
+            request = request.header(name.clone(), value);
         }
         let response = request
             .send()
@@ -264,17 +264,6 @@ impl WebhookService {
         let status = self
             .trigger(config, payload, Some((&header_name, token)))
             .await?;
-        if status == StatusCode::UNAUTHORIZED {
-            tracing::warn!(
-                webhook_config_id = config.id,
-                "Webhook rejected token, refreshing"
-            );
-            let token = self.token(auth, true).await?;
-            let status = self
-                .trigger(config, payload, Some((&header_name, token)))
-                .await?;
-            return Self::check_status(status);
-        }
         Self::check_status(status)
     }
 
@@ -296,13 +285,9 @@ impl WebhookServiceTrait for WebhookService {
         self.repo.find_by_channel_id(channel_id).await.map(|_| ())
     }
 
-    async fn get_config(&self, channel_code: &str) -> AppResult<WebhookConfig> {
-        let channel = self
-            .channels
-            .must_active(channel_code)
-            .await
-            .map_err(AppError::bad_request)?;
-        self.repo.find_by_channel_id(channel.id).await
+    async fn get_config(&self, channel_id: i32) -> AppResult<WebhookConfig> {
+        self.channels.get_active_by_id(channel_id).await?;
+        self.repo.find_by_channel_id(channel_id).await
     }
 
     async fn get_webhook_auth_configs(
@@ -314,13 +299,12 @@ impl WebhookServiceTrait for WebhookService {
             .await
     }
 
-    async fn max_attempts(&self, channel_code: &str) -> AppResult<u32> {
-        let config = self.get_config(channel_code).await?;
-        Ok(config.max_retries.saturating_add(1))
+    async fn max_attempts(&self, _channel_id: i32) -> AppResult<u32> {
+        Ok(1)
     }
 
     async fn send_webhook(&self, request: &NotifyValue) -> AppResult<()> {
-        let config = self.get_config(&request.channel).await?;
+        let config = self.get_config(request.channel_id).await?;
         let auth = self.get_webhook_auth_configs(config.id).await?;
         self.deliver(&config, &request.variables, auth.as_ref())
             .await

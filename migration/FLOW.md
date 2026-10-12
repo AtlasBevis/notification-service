@@ -24,6 +24,7 @@ Get-ChildItem migration\*.sql | Sort-Object Name | ForEach-Object {
 | `008_delivery_attempts.sql` | Dispatch attempt history |
 | `009_webhook_auth_configs.sql` | Webhook authentication configuration |
 | `010_webhook_config.sql` | Webhook endpoint, method, timeout, and retries |
+| `011_drop_webhook_auth_checks.sql` | Removes legacy webhook `CHECK` constraints; validation stays in the application |
 
 After the migrations, add each notification definition directly to `definitions` and associate it with existing source, channel, target, and template rows. Configure webhook channels in `webhook_configs` as needed.
 

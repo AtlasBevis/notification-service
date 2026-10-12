@@ -39,16 +39,8 @@ impl MSService {
 #[async_trait]
 impl MSTrait for MSService {
     async fn send_teams(&self, request: &NotifyValue) -> AppResult<()> {
-        let channel = self
-            .channels
-            .must_active(&request.channel)
-            .await
-            .map_err(AppError::bad_request)?;
-        let target = self
-            .targets
-            .must_active(&request.target)
-            .await
-            .map_err(AppError::bad_request)?;
+        let channel = self.channels.get_active_by_id(request.channel_id).await?;
+        let target = self.targets.get_active_by_id(request.target_id).await?;
         let url = target
             .teams_webhook_url()
             .or_else(|| channel.teams_webhook_url().ok())

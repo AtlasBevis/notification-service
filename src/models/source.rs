@@ -2,28 +2,34 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+use crate::enums::Status;
+use crate::error::{AppError, AppResult};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceData {
     pub id: i32,
     pub code: String,
     pub name: String,
-    pub status: String,
+    pub status: Status,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
     pub metadata: Value,
 }
 
 impl SourceData {
-    pub fn map_row(row: &tokio_postgres::Row) -> Self {
-        Self {
+    pub fn map_row(row: &tokio_postgres::Row) -> AppResult<Self> {
+        let status: String = row.get("status");
+        Ok(Self {
             id: row.get("id"),
             code: row.get("code"),
             name: row.get("name"),
-            status: row.get("status"),
+            status: Status::parse(&status).ok_or_else(|| {
+                AppError::internal(format!("unknown status `{status}` in sources"))
+            })?,
             metadata: row.get("metadata"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
             updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
-        }
+        })
     }
 }
 

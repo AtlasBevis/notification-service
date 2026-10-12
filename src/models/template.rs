@@ -3,11 +3,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
+use crate::enums::Status;
+use crate::error::{AppError, AppResult};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateData {
     pub id: i64,
     pub name: String,
-    pub status: String,
+    pub status: Status,
     pub title: String,
     pub content: String,
     pub format: String,
@@ -17,18 +20,21 @@ pub struct TemplateData {
 }
 
 impl TemplateData {
-    pub fn map_row(row: &tokio_postgres::Row) -> Self {
-        Self {
+    pub fn map_row(row: &tokio_postgres::Row) -> AppResult<Self> {
+        let status: String = row.get("status");
+        Ok(Self {
             id: row.get("id"),
             name: row.get("name"),
-            status: row.get("status"),
+            status: Status::parse(&status).ok_or_else(|| {
+                AppError::internal(format!("unknown status `{status}` in templates"))
+            })?,
             title: row.get("title"),
             content: row.get("content"),
             format: row.get("format"),
             version: row.get("version"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
             updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
-        }
+        })
     }
 
     /// Render templates with

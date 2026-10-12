@@ -2,9 +2,9 @@
 
 HTTP notification microservice (Rust + Axum + Kafka).
 
-Caller chỉ gọi `POST /notification/notify` với `code`, `trace_id` và `variables` để gửi notification. Service tra `definitions`, render template, tự ghi bản ghi runtime vào `notifications` và `deliveries`, rồi gửi qua `EMAIL`, `MSTEAMS` hoặc `WEBHOOK`. Không có API tạo, xem danh sách, cập nhật hoặc xóa notification; `definitions` được cấu hình trong database.
+Caller chỉ gọi `POST /notification/notify` với `source`, `code`, `trace_id` và `variables` để gửi notification. Service tra `definitions`, render template, tự ghi bản ghi runtime vào `notifications` và `deliveries`, rồi gửi qua `EMAIL`, `MSTEAMS` hoặc `WEBHOOK`. Không có API tạo, xem danh sách, cập nhật hoặc xóa notification; `definitions` được cấu hình trong database.
 
-`WebhookService` gửi một HTTP request theo `webhook_configs`. Worker quản lý retry và ghi `delivery_attempts`.
+`WebhookService` gửi một HTTP request tới endpoint theo `webhook_configs`; nếu cấu hình auth yêu cầu token, service lấy token rồi đính kèm trong header. Mỗi delivery chỉ gọi endpoint webhook một lần. Worker ghi kết quả vào `delivery_attempts`.
 
 - Request flow: [`docs/api_flow.md`](docs/api_flow.md)
 - Database setup: [`migration/FLOW.md`](migration/FLOW.md)

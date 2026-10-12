@@ -10,7 +10,7 @@
 | `channels` | Delivery types: `EMAIL`, `MSTEAMS`, `WEBHOOK` |
 | `targets` | Destination data associated with a channel |
 | `templates` | Message title and body, rendered with `{{key}}` |
-| `webhook_configs` | Webhook endpoint, method, timeout, and retry policy |
+| `webhook_configs` | Webhook endpoint, method, timeout, and retry configuration |
 | `definitions` | Maps a caller `code` to its source, channel, target, and template |
 | `notifications` | Runtime record for an accepted send request |
 | `deliveries` | Rendered message and delivery status |
@@ -36,8 +36,7 @@ sequenceDiagram
     API-->>Client: 202 Accepted
     alt Kafka enabled
         API->>Worker: Publish notification.send
-        Worker->>DB: Load webhook retry policy when needed
-        Worker->>Channel: Dispatch and retry
+        Worker->>Channel: Dispatch (webhook endpoint called once)
         Worker->>DB: Record attempts and delivery result
     else Kafka disabled
         API->>Channel: Dispatch directly
@@ -62,6 +61,8 @@ sequenceDiagram
 
 `code` resolves the preconfigured definition. `trace_id` is the caller's idempotency key. A repeated `(source, trace_id)` is rejected with **409 Conflict**. On acceptance, the API stores the notification and one delivery in the same transaction and returns **202 Accepted**.
 
+`webhook_auth_configs.request_headers` configures headers for the token request. The configured token header (`header_name` and `header_prefix`) is attached to the outgoing webhook request.
+
 ## Delivery status
 
 `notifications` records the accepted request and has no delivery status. Status is stored on `deliveries`; each dispatch attempt is stored in `delivery_attempts`.
@@ -72,7 +73,7 @@ sequenceDiagram
 | Another retry will run | `RETRY_WAIT` | `FAILED` or `TIMEOUT` |
 | Retries exhausted | `FAILED` | `FAILED` or `TIMEOUT` |
 
-Webhook method, timeout, and retry policy come from `webhook_configs`. Kafka enabled means the API publishes for asynchronous dispatch; otherwise the API dispatches directly.
+Webhook method and timeout come from `webhook_configs`. Each webhook delivery calls its endpoint once; when auth is configured, the service obtains the token and sends it in the configured header. Kafka enabled means the API publishes for asynchronous dispatch; otherwise the API dispatches directly. Non-webhook Kafka deliveries retain the worker retry behavior.
 
 ## Routes
 

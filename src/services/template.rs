@@ -7,7 +7,7 @@ use crate::repository::TemplateRepository;
 
 #[async_trait]
 pub trait TemplateTrait: Send + Sync {
-    async fn must_active_by_id(&self, id: i64) -> Result<TemplateData, String>;
+    async fn get_active_by_id(&self, id: i64) -> AppResult<TemplateData>;
     async fn create(&self, req: CreateTemplateRequest) -> AppResult<TemplateData>;
 }
 
@@ -24,12 +24,9 @@ impl TemplateService {
 
 #[async_trait]
 impl TemplateTrait for TemplateService {
-    async fn must_active_by_id(&self, id: i64) -> Result<TemplateData, String> {
-        match self.repo.find_by_id(id).await {
-            Ok(Some(t)) => is_active(t, id),
-            Ok(None) => Err(format!("unknown template id `{id}`")),
-            Err(err) => Err(format!("failed to load template `{id}`: {err}")),
-        }
+    async fn get_active_by_id(&self, id: i64) -> AppResult<TemplateData> {
+        let t = self.repo.find_by_id(id).await?;
+        is_active(t, id).map_err(AppError::bad_request)
     }
 
     async fn create(&self, req: CreateTemplateRequest) -> AppResult<TemplateData> {
@@ -60,7 +57,7 @@ impl TemplateTrait for TemplateService {
 }
 
 fn is_active(t: TemplateData, id: i64) -> Result<TemplateData, String> {
-    if t.status.eq_ignore_ascii_case("ACTIVE") {
+    if t.status == crate::enums::Status::Active {
         Ok(t)
     } else {
         Err(format!("template id `{id}` is not ACTIVE"))

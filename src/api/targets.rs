@@ -14,8 +14,7 @@ pub async fn get_target(
     }
 
     match state.targets_service.get_by_code(&key).await {
-        Ok(Some(data)) => ApiResponse::success(data),
-        Ok(None) => ApiResponse::not_found(format!("target `{key}` not found")),
+        Ok(data) => ApiResponse::success(data),
         Err(err) => err.to_response(),
     }
 }

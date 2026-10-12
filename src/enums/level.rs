@@ -6,29 +6,30 @@ pub const WARN: &str = "WARN";
 pub const CRITICAL: &str = "CRITICAL";
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Level {
-    INFO,
-    ERROR,
-    WARN,
-    CRITICAL,
+    Info,
+    Error,
+    Warn,
+    Critical,
 }
 
 impl Level {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::INFO => INFO,
-            Self::ERROR => ERROR,
-            Self::WARN => WARN,
-            Self::CRITICAL => CRITICAL,
+            Self::Info => INFO,
+            Self::Error => ERROR,
+            Self::Warn => WARN,
+            Self::Critical => CRITICAL,
         }
     }
 
     pub fn parse(s: &str) -> Option<Self> {
         match s {
-            INFO => Some(Self::INFO),
-            ERROR => Some(Self::ERROR),
-            WARN => Some(Self::WARN),
-            CRITICAL => Some(Self::CRITICAL),
+            INFO => Some(Self::Info),
+            ERROR => Some(Self::Error),
+            WARN => Some(Self::Warn),
+            CRITICAL => Some(Self::Critical),
             _ => None,
         }
     }

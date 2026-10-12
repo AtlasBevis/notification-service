@@ -32,10 +32,13 @@ impl TargetsRepository {
             )
             .await
             .context("list targets")?;
-        Ok(rows.iter().map(TargetData::map_row).collect())
+        rows.iter()
+            .map(TargetData::map_row)
+            .collect::<crate::error::AppResult<Vec<_>>>()
+            .map_err(Into::into)
     }
 
-    pub async fn find_by_code(&self, code: &str) -> Result<Option<TargetData>, AppError> {
+    pub async fn find_by_code(&self, code: &str) -> Result<TargetData, AppError> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
@@ -47,10 +50,11 @@ impl TargetsRepository {
                 &[&code],
             )
             .await?;
-        Ok(row.map(|r| TargetData::map_row(&r)))
+        let row = row.ok_or_else(|| AppError::not_found(format!("unknown target `{code}`")))?;
+        TargetData::map_row(&row)
     }
 
-    pub async fn find_by_id(&self, id: i32) -> Result<Option<TargetData>, AppError> {
+    pub async fn find_by_id(&self, id: i32) -> Result<TargetData, AppError> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
@@ -62,7 +66,8 @@ impl TargetsRepository {
                 &[&id],
             )
             .await?;
-        Ok(row.map(|r| TargetData::map_row(&r)))
+        let row = row.ok_or_else(|| AppError::not_found(format!("unknown target id `{id}`")))?;
+        TargetData::map_row(&row)
     }
 
     pub async fn insert(&self, req: &CreateTargetRequest) -> Result<TargetData, AppError> {
@@ -89,7 +94,7 @@ impl TargetsRepository {
                 ],
             )
             .await?;
-        Ok(TargetData::map_row(&row))
+        TargetData::map_row(&row)
     }
 
     pub async fn patch_metadata(

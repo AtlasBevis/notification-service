@@ -73,7 +73,7 @@ impl SourceTrait for SourceService {
 
     async fn get_active_by_code(&self, code: &str) -> AppResult<SourceData> {
         let s = self.get_by_code(code).await?;
-        if Status::Active.as_str() != s.status {
+        if s.status != Status::Active {
             return Err(AppError::bad_request(format!(
                 "source `{code}` is not ACTIVE",
             )));
@@ -83,7 +83,7 @@ impl SourceTrait for SourceService {
 
     async fn get_active_by_id(&self, id: i32) -> AppResult<SourceData> {
         let s = self.repo.find_by_id(id).await?;
-        if Status::Active.as_str() != s.status {
+        if s.status != Status::Active {
             return Err(AppError::bad_request(format!(
                 "source `{id}` is not ACTIVE",
             )));

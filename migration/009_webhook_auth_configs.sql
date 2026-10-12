@@ -24,9 +24,5 @@ CREATE TABLE webhook_auth_configs (
   created_at           timestamptz     NOT NULL DEFAULT now(),
   updated_at           timestamptz     NOT NULL DEFAULT now(),
 
-  CONSTRAINT uq_webhook_auth_configs_webhook UNIQUE (webhook_config_id),
-  CONSTRAINT ck_webhook_auth_configs_method CHECK (method IN ('GET', 'POST', 'PUT', 'PATCH')),
-  CONSTRAINT ck_webhook_auth_configs_body_format CHECK (body_format IN ('JSON', 'FORM')),
-  CONSTRAINT ck_webhook_auth_configs_timeout CHECK (timeout_seconds > 0),
-  CONSTRAINT ck_webhook_auth_configs_ttl CHECK (default_ttl_seconds > 0)
+  CONSTRAINT uq_webhook_auth_configs_webhook UNIQUE (webhook_config_id)
 );

@@ -35,7 +35,7 @@ impl DefinitionTrait for DefinitionService {
 
     async fn get_active_by_code(&self, code: &str) -> AppResult<DefinitionData> {
         let d = self.get_by_code(code).await?;
-        if Status::Active.as_str() != d.status {
+        if d.status != Status::Active {
             return Err(AppError::bad_request(format!(
                 "definition `{code}` is not ACTIVE",
             )));

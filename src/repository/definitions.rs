@@ -20,7 +20,7 @@ impl DefinitionRepository {
         let client = self.pool.get().await?;
         let sql = format!("SELECT {COLUMNS} FROM definitions WHERE code = $1");
         match client.query_opt(sql.as_str(), &[&code]).await? {
-            Some(row) => Ok(DefinitionData::map_row(&row)),
+            Some(row) => DefinitionData::map_row(&row),
             None => Err(AppError::not_found(format!("code {code} not found"))),
         }
     }
@@ -29,7 +29,7 @@ impl DefinitionRepository {
         let client = self.pool.get().await?;
         let sql = format!("SELECT {COLUMNS} FROM definitions WHERE id = $1");
         match client.query_opt(sql.as_str(), &[&id]).await? {
-            Some(row) => Ok(DefinitionData::map_row(&row)),
+            Some(row) => DefinitionData::map_row(&row),
             None => Err(AppError::not_found(format!("id {id} not found"))),
         }
     }

@@ -1,94 +1,66 @@
-# CLAUDE.md — Data Notification (`data-notification`)
+# CLAUDE.md — Data Notification
 
-Hướng dẫn cho AI assistant khi làm việc trong repository này.
+Repository guidance for AI assistants working on this Rust + Axum + Kafka notification service.
 
----
+## Service behavior
 
-## Service là gì?
+- The send endpoint is `POST /notification/notify` with `source`, `code`, `trace_id`, and `variables`.
+- `definitions` is configuration provisioned in the database. The service does not expose notification CRUD endpoints.
+- An accepted send internally inserts one row into `notifications` and one row into `deliveries` in a transaction.
+- Delivery channels are `EMAIL`, `MSTEAMS`, and `WEBHOOK`. Kafka dispatches asynchronously when enabled; otherwise the API dispatches directly.
+- Protected API routes use the `api-key` header. `GET /health` is public.
 
-**data-notification** là HTTP microservice (Rust + Axum) dùng để:
+Default listen address is `0.0.0.0:8080` (see `config.yaml` and environment overrides).
 
-1. Nhận thông báo từ các app nội bộ (`POST /notification/notify`: `code`, `trace_id`, `variables`)
-2. `notification_definitions` là catalog; `notifications` + `deliveries` là request. Worker gửi EMAIL / MSTEAMS / WEBHOOK
-3. Bảo vệ endpoint bằng header `api-key` (logging middleware trên protected routes)
+Webhook token endpoint headers are configured with `webhook_auth_configs.request_headers`. The configured token header (`header_name` and `header_prefix`) is attached to the outgoing webhook request.
 
-Default listen: `0.0.0.0:8080` (xem `config.yaml` / env).
+## Database constraints and validation
 
----
+- Do not add SQL `CHECK` constraints for request or webhook configuration values. Keep structural constraints such as primary keys, foreign keys, and required uniqueness.
+- Validate values at the application boundary and when parsing persisted configuration. Reject invalid HTTP header names/values before accepting the notification.
 
-## Tài liệu (`./docs`)
+## Documentation
 
-| File | Nội dung |
-|------|----------|
-| [`docs/api_flow.md`](docs/api_flow.md) | Request flow (Router → Logging → Auth → Handler → Service → Kafka) |
-| [`docs/how-to-write-new-api.md`](docs/how-to-write-new-api.md) | Checklist thêm API |
-| [`docs/HMAC_AUTH.md`](docs/HMAC_AUTH.md) | Header `api-key` |
-| [`docs/config.md`](docs/config.md) | Load `config.yaml`, secret env override |
+| File | Contents |
+|---|---|
+| [`docs/api_flow.md`](docs/api_flow.md) | Request and delivery flow, route list |
+| [`migration/FLOW.md`](migration/FLOW.md) | Migration order and database lifecycle |
+| [`docs/how-to-write-new-api.md`](docs/how-to-write-new-api.md) | API handler conventions |
+| [`docs/HMAC_AUTH.md`](docs/HMAC_AUTH.md) | `api-key` authentication |
+| [`docs/config.md`](docs/config.md) | `config.yaml` and environment configuration |
 
----
+## Architecture
 
-## Stack
-
-| Area | Crate |
-|------|--------|
-| HTTP server | `axum` 0.7, `tokio` |
-| Kafka | `rskafka` 0.6 |
-| Postgres | `deadpool-postgres` + `tokio-postgres` |
-| HTTP client | `reqwest` + `reqwest-middleware` |
-| Auth | header `api-key` |
-| Logging | `tracing` JSON |
-
----
-
-## Cấu trúc
-
-```
+```text
 src/
-  main.rs              # API process (`data-notification`)
-  bin/notification_consumer.rs  # Kafka worker (`notification-consumer`)
-  app.rs               # run_api() / run_notification_consumer()
-  bootstrap/           # composition root
-  api/                 # notify, sources, targets, templates, health, routes
-  middlewares/         # auth (api-key), logging, metrics
-  services/            # notification, sources, targets, channels, templates
-  models/              # send_request, channel, source, target, template, ...
-  repository/          # channels, sources, targets, templates, notifications, deliveries (Postgres)
-  infras/
-    postgres/          # PostgresManager
-    kafka/             # KafkaBus
-    http/              # HttpClient
-  config/
-  state.rs
+  api/          Axum handlers and routes
+  models/       Request, response, and event data
+  services/     Business operations; service-to-service dependencies use traits
+  repository/   PostgreSQL adapters
+  infras/       PostgreSQL, Kafka, and HTTP clients
+  bootstrap/    Concrete implementations wired behind service traits
 ```
 
-Luồng: `api (handler) → services → repository / infras (kafka / postgres / http)`
-
-Templates: stored in Postgres `templates`, loaded into memory at startup (`TemplatesService`).
-
----
+Keep handlers thin: parse/normalize/validate requests, call a service trait, and return `ApiResponse`. Put orchestration in services and SQL in repositories. Keep concrete service implementations wired in `bootstrap/`.
 
 ## Routes
 
-| Path | Auth |
-|------|------|
-| `GET /health` | Public |
-| `POST /notification` | `api-key` |
-| `GET /notification/{uuid}` | `api-key` |
-| `POST /notification/notify` | `api-key` |
-| `GET /notification/sources/{code}` | `api-key` |
-| `POST /notification/sources` | `api-key` |
-| `PATCH /notification/sources/metadata` | `api-key` |
-| `GET /notification/targets/{code}` | `api-key` |
-| `POST /notification/targets` | `api-key` |
-| `PATCH /notification/targets/metadata` | `api-key` |
-| `POST /notification/templates` | `api-key` |
+| Method | Path | Auth |
+|---|---|---|
+| `GET` | `/health` | Public |
+| `POST` | `/notification/notify` | `api-key` |
+| `GET` | `/notification/sources/{code}` | `api-key` |
+| `POST` | `/notification/sources` | `api-key` |
+| `PATCH` | `/notification/sources/metadata` | `api-key` |
+| `GET` | `/notification/targets/{code}` | `api-key` |
+| `POST` | `/notification/targets` | `api-key` |
+| `PATCH` | `/notification/targets/metadata` | `api-key` |
+| `POST` | `/notification/templates` | `api-key` |
 
-Middleware (protected): `logging` → `auth` (`api-key`).
+There are no create/list/get/update/delete notification routes.
 
----
+## Configuration
 
-## Config
-
-- `CONFIG_PATH` (default `config.yaml`)
-- Secret override (non-dev): `POSTGRES_PASSWORD`, `KAFKA_BROKERS`, `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD`
-- `auth.api_key` from config / ConfigMap (not Secrets env override)
+- `CONFIG_PATH` defaults to `config.yaml`.
+- Non-development secret overrides include `POSTGRES_PASSWORD`, `KAFKA_BROKERS`, `KAFKA_SASL_USERNAME`, and `KAFKA_SASL_PASSWORD`.
+- `auth.api_key` comes from config/ConfigMap; do not commit secrets.

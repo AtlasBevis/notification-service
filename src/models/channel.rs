@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::enums::{Channel, Status};
+use crate::error::{AppError, AppResult};
 use crate::utils::json::get_string;
 
 /// SMTP settings from EMAIL channel `metadata`.
@@ -15,25 +17,31 @@ pub struct SmtpConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelData {
     pub id: i32,
-    pub code: String,
+    pub code: Channel,
     pub name: String,
-    pub status: String,
+    pub status: Status,
     pub metadata: Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
 
 impl ChannelData {
-    pub fn map_row(row: &tokio_postgres::Row) -> Self {
-        Self {
+    pub fn map_row(row: &tokio_postgres::Row) -> AppResult<Self> {
+        let code: String = row.get("code");
+        let status: String = row.get("status");
+        Ok(Self {
             id: row.get("id"),
-            code: row.get("code"),
+            code: Channel::parse(&code).ok_or_else(|| {
+                AppError::internal(format!("unknown channel `{code}` in database"))
+            })?,
             name: row.get("name"),
-            status: row.get("status"),
+            status: Status::parse(&status).ok_or_else(|| {
+                AppError::internal(format!("unknown status `{status}` in channels"))
+            })?,
             metadata: row.get("metadata"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
             updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
-        }
+        })
     }
 
     /// MSTEAMS: `metadata.url` — incoming webhook URL.

@@ -206,10 +206,10 @@ impl NotifyService {
     }
 
     async fn max_attempts_for(&self, request: &NotifyValue) -> u32 {
-        if Channel::parse(&request.channel) != Some(Channel::WEBHOOK) {
+        if request.channel != Channel::WEBHOOK {
             return MAX_ATTEMPTS;
         }
-        match self.webhooks.max_attempts(&request.channel).await {
+        match self.webhooks.max_attempts(request.channel_id).await {
             Ok(attempts) => attempts.max(1),
             Err(err) => {
                 tracing::warn!(error = %err, "Could not resolve webhook retry policy");
@@ -257,33 +257,32 @@ impl NotifyService {
         &self,
         request: &NotifyRequest,
         definition: &DefinitionData,
-        source_code: &str,
-        channel_code: &str,
+        channel: &crate::models::ChannelData,
         target: Option<&TargetData>,
-    ) -> Result<NotifyMessage, String> {
+    ) -> AppResult<NotifyMessage> {
+        let channel_code = channel.code.as_str();
         let template = self
             .templates
-            .must_active_by_id(i64::from(definition.template_id))
+            .get_active_by_id(i64::from(definition.template_id))
             .await?;
 
         let recipients = target.map(TargetData::recipients).unwrap_or_default();
         if channel_code.eq_ignore_ascii_case(Channel::EMAIL.as_str()) && !recipients.has_to() {
-            return Err(format!(
+            return Err(AppError::bad_request(format!(
                 "target `{}` metadata.to is required for EMAIL channel",
                 target.map(|item| item.code.as_str()).unwrap_or("")
-            ));
+            )));
         }
 
         let (title, message) = template.merge_template(&request.variables);
-        Ok(NotifyMessage::new(request)
-            .with_definition(
-                definition,
-                source_code,
-                channel_code,
-                target.map(|item| item.code.as_str()).unwrap_or(""),
-                template.name,
-                recipients,
-            )
+        Ok(NotifyMessage::with_request(request)
+            .with_definition(definition)
+            .map_err(AppError::bad_request)?
+            .with_channel(channel)
+            .map_err(AppError::bad_request)?
+            .with_target(target)
+            .with_template(template.name)
+            .with_recipients(recipients)
             .with_rendered(title, message))
     }
 }
@@ -304,9 +303,7 @@ impl NotifyTrait for NotifyService {
             .channels
             .get_active_by_id(definition.channel_id)
             .await?;
-        let kind = Channel::parse(&channel.code).ok_or_else(|| {
-            AppError::bad_request(format!("unsupported channel `{}`", channel.code))
-        })?;
+        let kind = channel.code;
         let target = match kind {
             Channel::WEBHOOK => {
                 self.webhooks.validate(channel.id).await?;
@@ -314,7 +311,7 @@ impl NotifyTrait for NotifyService {
             }
             Channel::EMAIL | Channel::MSTEAMS => {
                 let target = self.targets.get_active_by_id(definition.target_id).await?;
-                if !target.channel_code.eq_ignore_ascii_case(&channel.code) {
+                if target.channel_code != channel.code {
                     return Err(AppError::bad_request(format!(
                         "target `{}` does not belong to channel `{}`",
                         target.code, channel.code
@@ -324,15 +321,8 @@ impl NotifyTrait for NotifyService {
             }
         };
 
-        self.build_notify_message(
-            &request,
-            &definition,
-            &source.code,
-            &channel.code,
-            target.as_ref(),
-        )
-        .await
-        .map_err(AppError::bad_request)
+        self.build_notify_message(&request, &definition, &channel, target.as_ref())
+            .await
     }
 
     async fn notify(&self, mut msg: NotifyMessage) -> AppResult<()> {
@@ -343,7 +333,7 @@ impl NotifyTrait for NotifyService {
         let variables = Value::Object(msg.value.variables.clone());
         let drafts = vec![DeliveryDraft {
             target_code: msg.value.target.clone(),
-            channel_code: msg.value.channel.clone(),
+            channel_code: msg.value.channel.as_str().to_string(),
             title: msg.value.title.clone().unwrap_or_default(),
             body: msg.value.message.clone().unwrap_or_default(),
             payload: variables.clone(),
@@ -393,7 +383,7 @@ impl NotifyTrait for NotifyService {
                         &topic,
                         &value.trace_id,
                         &value.source,
-                        &value.kind,
+                        value.level.as_str(),
                         EVENT_TYPE_SEND,
                         &msg,
                     )

@@ -12,8 +12,7 @@ use crate::repository::TargetsRepository;
 pub trait TargetTrait: Send + Sync {
     async fn load(&self) -> anyhow::Result<()>;
     async fn get(&self, code: &str) -> Option<TargetData>;
-    async fn get_by_code(&self, code: &str) -> AppResult<Option<TargetData>>;
-    async fn must_active(&self, code: &str) -> Result<TargetData, String>;
+    async fn get_by_code(&self, code: &str) -> AppResult<TargetData>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData>;
     async fn create(&self, req: CreateTargetRequest) -> AppResult<()>;
     async fn patch_metadata(&self, req: PatchMetadataRequest) -> AppResult<()>;
@@ -53,45 +52,19 @@ impl TargetTrait for TargetsService {
         self.cache.read().await.get(&key).cloned()
     }
 
-    async fn get_by_code(&self, code: &str) -> AppResult<Option<TargetData>> {
+    async fn get_by_code(&self, code: &str) -> AppResult<TargetData> {
         if let Some(t) = self.get(code).await {
-            return Ok(Some(t));
+            return Ok(t);
         }
-
-        match self.repo.find_by_code(code).await {
-            Ok(Some(t)) => {
-                self.cache.write().await.insert(code.to_owned(), t.clone());
-                Ok(Some(t))
-            }
-            Ok(None) => Ok(None),
-            Err(err) => {
-                tracing::error!(error = %err, code, "find target by code failed");
-                Err(err)
-            }
-        }
+        let t = self.repo.find_by_code(code).await?;
+        self.cache.write().await.insert(t.code.clone(), t.clone());
+        Ok(t)
     }
 
     async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData> {
-        match self.repo.find_by_id(id).await {
-            Ok(Some(t)) => {
-                self.cache.write().await.insert(t.code.clone(), t.clone());
-                active_target(t, &format!("id `{id}`")).map_err(AppError::bad_request)
-            }
-            Ok(None) => Err(AppError::not_found(format!("unknown target id `{id}`"))),
-            Err(err) => {
-                tracing::error!(error = %err, id, "load target failed");
-                Err(err)
-            }
-        }
-    }
-
-    async fn must_active(&self, code: &str) -> Result<TargetData, String> {
-        let target = self
-            .get_by_code(code)
-            .await
-            .map_err(|err| err.to_string())?
-            .ok_or_else(|| format!("unknown target `{code}`"))?;
-        active_target(target, &format!("`{code}`"))
+        let t = self.repo.find_by_id(id).await?;
+        self.cache.write().await.insert(t.code.clone(), t.clone());
+        active_target(t, &format!("id `{id}`")).map_err(AppError::bad_request)
     }
 
     async fn create(&self, req: CreateTargetRequest) -> AppResult<()> {
@@ -130,7 +103,7 @@ impl TargetTrait for TargetsService {
 }
 
 fn active_target(t: TargetData, label: &str) -> Result<TargetData, String> {
-    if t.status.eq_ignore_ascii_case(Status::Active.as_str()) {
+    if t.status == Status::Active {
         Ok(t)
     } else {
         Err(format!("target {label} is not ACTIVE"))

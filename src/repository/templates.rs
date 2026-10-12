@@ -15,7 +15,7 @@ impl TemplateRepository {
         Self { pool }
     }
 
-    pub async fn find_by_id(&self, id: i64) -> Result<Option<TemplateData>, AppError> {
+    pub async fn find_by_id(&self, id: i64) -> Result<TemplateData, AppError> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
@@ -25,7 +25,8 @@ impl TemplateRepository {
                 &[&id],
             )
             .await?;
-        Ok(row.as_ref().map(TemplateData::map_row))
+        let row = row.ok_or_else(|| AppError::not_found(format!("unknown template id `{id}`")))?;
+        TemplateData::map_row(&row)
     }
 
     pub async fn next_version(&self, name: &str) -> Result<i32, AppError> {
@@ -60,6 +61,6 @@ impl TemplateRepository {
                 &[&name, &status, &title, &content, &format, &version, &now],
             )
             .await?;
-        Ok(TemplateData::map_row(&row))
+        TemplateData::map_row(&row)
     }
 }

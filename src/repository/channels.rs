@@ -25,10 +25,13 @@ impl ChannelRepository {
             )
             .await
             .context("list channels")?;
-        Ok(rows.iter().map(ChannelData::map_row).collect())
+        rows.iter()
+            .map(ChannelData::map_row)
+            .collect::<crate::error::AppResult<Vec<_>>>()
+            .map_err(Into::into)
     }
 
-    pub async fn find_by_code(&self, code: &str) -> Result<Option<ChannelData>, AppError> {
+    pub async fn find_by_code(&self, code: &str) -> Result<ChannelData, AppError> {
         let client = self.pool.get().await?;
         let key = code.trim().to_ascii_uppercase();
         let row = client
@@ -38,10 +41,11 @@ impl ChannelRepository {
                 &[&key],
             )
             .await?;
-        Ok(row.map(|r| ChannelData::map_row(&r)))
+        let row = row.ok_or_else(|| AppError::not_found(format!("unknown channel `{key}`")))?;
+        ChannelData::map_row(&row)
     }
 
-    pub async fn find_by_id(&self, id: i32) -> Result<Option<ChannelData>, AppError> {
+    pub async fn find_by_id(&self, id: i32) -> Result<ChannelData, AppError> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
@@ -50,6 +54,7 @@ impl ChannelRepository {
                 &[&id],
             )
             .await?;
-        Ok(row.map(|r| ChannelData::map_row(&r)))
+        let row = row.ok_or_else(|| AppError::not_found(format!("unknown channel id `{id}`")))?;
+        ChannelData::map_row(&row)
     }
 }
