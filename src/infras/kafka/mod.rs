@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tracing::Instrument;
 
-use crate::config::{Config, KafkaConfig};
+use crate::config::{Config, KafkaConfig, KafkaSecurityProtocol};
 
 /// Kafka produce/consume helper (rskafka, partition-aware, key = correlation_id).
 #[derive(Clone)]
@@ -33,7 +33,12 @@ impl KafkaBus {
         let mut builder =
             ClientBuilder::new(config.brokers.clone()).client_id(config.client_id.clone());
 
-        if !config.sasl.username.is_empty() {
+        if config.security_protocol == KafkaSecurityProtocol::SaslPlaintext {
+            if config.sasl.username.is_empty() {
+                return Err(AppError::internal(
+                    "kafka.sasl.username is empty but kafka.security_protocol is SASL_PLAINTEXT",
+                ));
+            }
             let creds = Credentials {
                 username: config.sasl.username.clone(),
                 password: config.sasl.password.clone(),

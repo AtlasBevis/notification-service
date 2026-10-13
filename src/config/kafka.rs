@@ -5,6 +5,7 @@ pub struct KafkaConfig {
     pub enabled: bool,
     pub brokers: Vec<String>,
     pub client_id: String,
+    pub security_protocol: KafkaSecurityProtocol,
     pub sasl: KafkaSaslConfig,
     pub topics: KafkaTopics,
     pub consumer: KafkaConsumerConfig,
@@ -16,8 +17,17 @@ impl KafkaConfig {
     }
 }
 
+/// `PLAINTEXT` (no authentication) or `SASL_PLAINTEXT` (SASL over an unencrypted connection).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum KafkaSecurityProtocol {
+    Plaintext,
+    SaslPlaintext,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct KafkaSaslConfig {
+    /// `PLAIN`, `SCRAM-SHA-256` or `SCRAM-SHA-512`; used only with `SASL_PLAINTEXT`.
     pub mechanism: String,
     pub username: String,
     pub password: String,

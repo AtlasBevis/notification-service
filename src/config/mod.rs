@@ -6,6 +6,6 @@ mod server;
 
 pub use app::Config;
 pub use auth::AuthConfig;
-pub use kafka::KafkaConfig;
+pub use kafka::{KafkaConfig, KafkaSecurityProtocol};
 pub use postgres::PostgresConfig;
 pub use server::{HttpConfig, ServerConfig};

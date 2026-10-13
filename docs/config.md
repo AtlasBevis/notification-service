@@ -21,6 +21,11 @@ No hot-reload. On k8s, update secret/config then restart the pod.
 
 Main sections: `server`, `auth`, `postgres`, `kafka`, `notification`.
 
+`kafka` section:
+
+- `security_protocol`: `PLAINTEXT` (no authentication; the `sasl` values are ignored) or `SASL_PLAINTEXT` (authenticate with `sasl.username` / `sasl.password`). Any other value fails startup with a parse error; TLS protocols (`SSL`, `SASL_SSL`) are not supported.
+- `sasl.mechanism`: `PLAIN`, `SCRAM-SHA-256`, or `SCRAM-SHA-512`. Used only with `SASL_PLAINTEXT`. This is the SASL mechanism, not the security protocol.
+
 `notification` section:
 
 - `teams.url` (or env `TEAMS_URL`): Teams webhook URL.

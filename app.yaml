@@ -28,12 +28,13 @@ postgres:
 kafka:
   enabled: true
   brokers:
-    - "localhost:9092"
+    - "localhost:9094"
   client_id: "notification"
+  security_protocol: SASL_PLAINTEXT
   sasl:
-    mechanism: SASL_PLAINTEXT
+    mechanism: PLAIN
     username: "notification"
-    password: ""
+    password: "NotifKafka_2026!ChangeMe9"
   topics:
     send: "notification.send"
   consumer:

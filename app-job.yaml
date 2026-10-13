@@ -30,8 +30,9 @@ kafka:
   brokers:
     - "localhost:9092"
   client_id: "notification-job"
+  security_protocol: SASL_PLAINTEXT
   sasl:
-    mechanism: SASL_PLAINTEXT
+    mechanism: PLAIN
     username: "notification"
     password: ""
   topics:
