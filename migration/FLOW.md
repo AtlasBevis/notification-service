@@ -1,6 +1,6 @@
 # Database setup and notification flow
 
-`definitions` stores the send configuration. `notifications` and `deliveries` are runtime rows created internally by `POST /notification/notify`; the API does not expose notification CRUD.
+`definitions` stores the send configuration. `notifications` and `deliveries` are runtime rows created internally by `POST /notification/noti/notify`; the API does not expose notification CRUD.
 
 ## Migration order
 
@@ -30,7 +30,7 @@ After the migrations, create target groups with the matching `channel_id`, then 
 ## Runtime lifecycle
 
 ```text
-POST /notification/notify
+POST /notification/noti/notify
   -> resolve active definition and configuration
   -> render the template's latest ACTIVE version
   -> transactionally insert notifications + deliveries

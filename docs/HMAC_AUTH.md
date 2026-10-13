@@ -7,7 +7,7 @@ Protected routes require a single header:
 | `api-key` | Value from `auth.api_key` in config (ConfigMap on k8s). |
 
 ```http
-POST /notification/notify
+POST /notification/noti/notify
 api-key: <secret>
 Content-Type: application/json
 ```

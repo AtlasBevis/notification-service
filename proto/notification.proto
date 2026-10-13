@@ -4,7 +4,7 @@ package notification.v1;
 
 import "google/protobuf/struct.proto";
 
-// Internal gRPC entry point; same behaviour as `POST /notification/notify`.
+// Internal gRPC entry point; same behaviour as `POST /notification/noti/notify`.
 // Callers send the `api-key` metadata entry.
 service Notification {
   // Validate, record and publish one notification.

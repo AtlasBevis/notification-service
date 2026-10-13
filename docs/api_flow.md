@@ -34,7 +34,7 @@ sequenceDiagram
     participant Worker as notification-job
     participant Channel as EMAIL / MSTEAMS / WEBHOOK
 
-    Client->>API: POST /notification/notify
+    Client->>API: POST /notification/noti/notify
     API->>API: Validate api-key and request
     API->>DB: Load definition and active source/channel/target/template
     API->>API: Render title, body, payload
@@ -47,7 +47,7 @@ sequenceDiagram
 
 ## Request
 
-`POST /notification/notify` with the `api-key` header:
+`POST /notification/noti/notify` with the `api-key` header:
 
 ```json
 {
@@ -86,7 +86,7 @@ For `TOKEN_ENDPOINT`, set `auth_mode = 'TOKEN_ENDPOINT'`, provide `token_url`, `
 
 ## gRPC (internal)
 
-`data-notification` also serves `notification.v1.Notification/Notify` for internal callers, on `server.grpc.port` (default config: `50051`) when `server.grpc.enabled` is `true`. The contract is [`proto/notification.proto`](../proto/notification.proto). It runs the same flow as `POST /notification/notify`: same validation, same `(source, trace_id)` idempotency, same publish to Kafka.
+`data-notification` also serves `notification.v1.Notification/Notify` for internal callers, on `server.grpc.port` (default config: `50051`) when `server.grpc.enabled` is `true`. The contract is [`proto/notification.proto`](../proto/notification.proto). It runs the same flow as `POST /notification/noti/notify`: same validation, same `(source, trace_id)` idempotency, same publish to Kafka.
 
 | | HTTP | gRPC |
 |---|---|---|
@@ -127,7 +127,7 @@ Webhook method and timeout come from `webhook_configs`. Each webhook delivery ca
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/health` | Public health check |
-| `POST` | `/notification/notify` | Validate, accept, and dispatch a notification |
+| `POST` | `/notification/noti/notify` | Validate, accept, and dispatch a notification |
 | `POST` | `/notification/sources` | Create a source |
 | `GET` | `/notification/sources/{code}` | Read a source |
 | `PATCH` | `/notification/sources/metadata` | Update source metadata |

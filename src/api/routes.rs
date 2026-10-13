@@ -1,44 +1,59 @@
 use crate::api::{health, notify, sources, targets, templates};
+use crate::config::Config;
 use crate::middlewares::{auth_middleware, http_metrics_middleware, logging_middleware};
 use crate::state::SharedState;
-use axum::routing::patch;
 use axum::{
     middleware,
-    routing::{get, post},
+    routing::{get, patch, post},
     Router,
 };
 
-const TEMPLATES_API: &str = "/templates";
+const HEALTH_API: &str = "/health";
+const NOTI_API: &str = "/noti";
 const SOURCES_API: &str = "/sources";
 const TARGETS_API: &str = "/targets";
-const PATH_BASE: &str = "/notification";
+const TEMPLATES_API: &str = "/templates";
 
+/// `/health` is public at the root; everything else is protected under `server.base_path`.
 pub fn app_routes(state: SharedState) -> Router {
-    let public = Router::new().route("/health", get(health::health));
+    let base_path = Config::load().server.base_path.as_str();
 
-    let templates = Router::new().route("/", post(templates::create_template));
+    Router::new()
+        .route(HEALTH_API, get(health::health))
+        .nest(base_path, protected_routes())
+        .with_state(state)
+}
 
-    let sources_routes = Router::new()
-        .route("/metadata", patch(sources::patch_metadata))
-        .route("/{code}", get(sources::get_source))
-        .route("/", post(sources::create_source));
-
-    let targets_routes = Router::new()
-        .route("/metadata", patch(targets::patch_metadata))
-        .route("/{code}", get(targets::get_target))
-        .route("/", post(targets::create_target));
-
-    let notification = Router::new()
-        .route("/notify", post(notify::notify))
-        .nest(TEMPLATES_API, templates)
-        .nest(SOURCES_API, sources_routes)
-        .nest(TARGETS_API, targets_routes);
-
-    let protected = Router::new()
-        .nest(PATH_BASE, notification)
+fn protected_routes() -> Router<SharedState> {
+    Router::new()
+        .nest(NOTI_API, noti_routes())
+        .nest(SOURCES_API, source_routes())
+        .nest(TARGETS_API, target_routes())
+        .nest(TEMPLATES_API, template_routes())
         .route_layer(middleware::from_fn(auth_middleware))
         .route_layer(middleware::from_fn(logging_middleware))
-        .route_layer(middleware::from_fn(http_metrics_middleware));
+        .route_layer(middleware::from_fn(http_metrics_middleware))
+}
 
-    public.merge(protected).with_state(state)
+/// Routes that work on the `notifications` table.
+fn noti_routes() -> Router<SharedState> {
+    Router::new().route("/notify", post(notify::notify))
+}
+
+fn source_routes() -> Router<SharedState> {
+    Router::new()
+        .route("/", post(sources::create_source))
+        .route("/metadata", patch(sources::patch_metadata))
+        .route("/:code", get(sources::get_source))
+}
+
+fn target_routes() -> Router<SharedState> {
+    Router::new()
+        .route("/", post(targets::create_target))
+        .route("/metadata", patch(targets::patch_metadata))
+        .route("/:code", get(targets::get_target))
+}
+
+fn template_routes() -> Router<SharedState> {
+    Router::new().route("/", post(templates::create_template))
 }

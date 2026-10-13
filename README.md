@@ -4,7 +4,7 @@ Service gửi thông báo nội bộ (Rust + Axum + Kafka + Postgres). Các hệ
 
 ## Tổng quan
 
-Caller gọi `POST /notification/notify` với `source`, `code`, `trace_id` và `variables`. `code` trỏ tới một `definition` đã cấu hình sẵn trong database, từ đó service biết gửi qua kênh nào, tới những target nào, dùng template nào. Không có API tạo, xem, sửa hay xoá notification.
+Caller gọi `POST /notification/noti/notify` với `source`, `code`, `trace_id` và `variables`. `code` trỏ tới một `definition` đã cấu hình sẵn trong database, từ đó service biết gửi qua kênh nào, tới những target nào, dùng template nào. Không có API tạo, xem, sửa hay xoá notification.
 
 Project build ra hai binary, mỗi binary một vai trò:
 
@@ -14,7 +14,7 @@ Project build ra hai binary, mỗi binary một vai trò:
 | `notification-job` | `app-job.yaml` | Kafka consumer. Đọc topic, gửi ra kênh, retry và ghi kết quả vào `deliveries` / `delivery_attempts`. |
 
 ```text
-Caller ──POST /notification/notify──► data-notification ──► Kafka ──► notification-job ──► EMAIL / MSTEAMS / WEBHOOK
+Caller ──POST /notification/noti/notify──► data-notification ──► Kafka ──► notification-job ──► EMAIL / MSTEAMS / WEBHOOK
                                             │                                │
                                             └──────────── Postgres ──────────┘
 ```
@@ -45,14 +45,14 @@ Mọi route dưới `/notification` cần header `api-key`; `GET /health` là pu
 | Method | Path | Mục đích |
 |---|---|---|
 | `GET` | `/health` | Health check |
-| `POST` | `/notification/notify` | Gửi notification |
+| `POST` | `/notification/noti/notify` | Gửi notification |
 | `GET` / `POST` | `/notification/sources/{code}`, `/notification/sources` | Xem / tạo source |
 | `PATCH` | `/notification/sources/metadata` | Sửa metadata của source |
 | `GET` / `POST` | `/notification/targets/{code}`, `/notification/targets` | Xem / tạo target |
 | `PATCH` | `/notification/targets/metadata` | Sửa metadata của target |
 | `POST` | `/notification/templates` | Tạo phiên bản template mới |
 
-Hệ thống nội bộ có thể gọi gRPC thay cho HTTP: `notification.v1.Notification/Notify` ở cổng `50051`, contract tại [`proto/notification.proto`](proto/notification.proto). Luồng xử lý giống hệt `POST /notification/notify`, `api-key` gửi qua metadata. Chi tiết và ví dụ `grpcurl` ở [`docs/api_flow.md`](docs/api_flow.md).
+Hệ thống nội bộ có thể gọi gRPC thay cho HTTP: `notification.v1.Notification/Notify` ở cổng `50051`, contract tại [`proto/notification.proto`](proto/notification.proto). Luồng xử lý giống hệt `POST /notification/noti/notify`, `api-key` gửi qua metadata. Chi tiết và ví dụ `grpcurl` ở [`docs/api_flow.md`](docs/api_flow.md).
 
 ## Chạy local
 

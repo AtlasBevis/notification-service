@@ -21,8 +21,13 @@ No hot-reload. On k8s, update secret/config then restart the pod.
 
 Main sections: `server`, `auth`, `postgres`, `kafka`, `notification`.
 
+`server` section:
+
+- `base_path`: prefix of every protected HTTP route (`/notification`). Must start with `/` and must not end with `/`, otherwise startup fails. `GET /health` stays at the root. Route tables in the docs assume `/notification`.
+
 `kafka` section:
 
+- `timeout`: max seconds to wait for the initial broker connection. On timeout the API starts without Kafka (sends fail until restart) and the job refuses to start.
 - `security_protocol`: `PLAINTEXT` (no authentication; the `sasl` values are ignored) or `SASL_PLAINTEXT` (authenticate with `sasl.username` / `sasl.password`). Any other value fails startup with a parse error; TLS protocols (`SSL`, `SASL_SSL`) are not supported.
 - `sasl.mechanism`: `PLAIN`, `SCRAM-SHA-256`, or `SCRAM-SHA-512`. Used only with `SASL_PLAINTEXT`. This is the SASL mechanism, not the security protocol.
 

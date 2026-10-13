@@ -56,9 +56,16 @@ impl KafkaBus {
             builder = builder.sasl_config(sasl);
         }
 
-        let client = builder
-            .build()
+        // rskafka retries the bootstrap connection forever, so bound it here.
+        let connect_timeout = Duration::from_secs(config.timeout);
+        let client = tokio::time::timeout(connect_timeout, builder.build())
             .await
+            .map_err(|_| {
+                AppError::internal(format!(
+                    "Kafka connection timed out after {}s",
+                    config.timeout
+                ))
+            })?
             .map_err(|e| AppError::internal_with("Failed to connect to Kafka", e))?;
 
         Ok(Self {

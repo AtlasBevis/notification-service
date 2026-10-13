@@ -17,7 +17,7 @@ pub trait NotificationTrait: Send + Sync {
     ) -> AppResult<AcceptedNotification>;
 }
 
-/// Persists a notification accepted by the `/notification/notify` flow.
+/// Persists a notification accepted by the `/notification/noti/notify` flow.
 #[derive(Clone)]
 pub struct NotificationService {
     notifications: NotificationsRepository,

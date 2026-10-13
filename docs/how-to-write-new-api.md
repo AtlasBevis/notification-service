@@ -8,10 +8,10 @@ Add a method on `NotificationService` in `src/services/`. Keep Kafka produce/con
 ## 2. API handler
 Add a thin handler in `src/api/<domain>.rs` with a request DTO, then call the injected service from `AppState`.
 
-Return **only** `ApiResponse` / `ApiResponse<T>` (never `AppResult<…>`). Example: `POST /notification/notify` in `src/api/notify.rs`.
+Return **only** `ApiResponse` / `ApiResponse<T>` (never `AppResult<…>`). Example: `POST /notification/noti/notify` in `src/api/notify.rs`.
 
 ## 3. Register the route
-Nest it in `src/api/routes.rs` under `/notification` on the **protected** router (`api-key` + logging), unless the endpoint must be public like `/health`.
+Nest it in `src/api/routes.rs` in `protected_routes()` (mounted under `server.base_path`, `/notification`) on the **protected** router (`api-key` + logging), unless the endpoint must be public like `/health`.
 
 ## Repository and model mapping
 Keep SQL in `src/repository/`. For database results, define `map_row(&tokio_postgres::Row) -> AppResult<Self>` on the corresponding model in `src/models/`. Repository methods should handle query/not-found behavior, then call the model mapper; do not read columns or parse persisted enums in the repository.

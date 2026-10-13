@@ -32,6 +32,7 @@ impl Config {
             AppError::internal_with(format!("Failed to parse config file `{path}`"), e)
         })?;
         config.apply_secrets();
+        config.server.validate()?;
         Ok(config)
     }
 

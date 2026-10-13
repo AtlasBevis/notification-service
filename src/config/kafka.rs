@@ -5,6 +5,8 @@ pub struct KafkaConfig {
     pub enabled: bool,
     pub brokers: Vec<String>,
     pub client_id: String,
+    /// Max seconds to wait for the initial broker connection.
+    pub timeout: u64,
     pub security_protocol: KafkaSecurityProtocol,
     pub sasl: KafkaSaslConfig,
     pub topics: KafkaTopics,

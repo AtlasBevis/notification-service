@@ -4,14 +4,14 @@ Repository guidance for AI assistants working on this Rust + Axum + Kafka notifi
 
 ## Service behavior
 
-- The send endpoint is `POST /notification/notify` with `source`, `code`, `trace_id`, and `variables`.
+- The send endpoint is `POST /notification/noti/notify` with `source`, `code`, `trace_id`, and `variables`.
 - `definitions` is configuration provisioned in the database. The service does not expose notification CRUD endpoints.
 - Templates are selected per target by `definition_targets.template_id`; `definitions` has no `template_id`. A WEBHOOK target with a template sends that `format = 'JSON'` template as its request body; without one it sends the request's `variables` unchanged. EMAIL and MSTEAMS require a template and render one title/body from the first linked target that has one.
 - An accepted send internally inserts one row into `notifications` and one row into `deliveries` in a transaction.
 - Delivery channels are `EMAIL`, `MSTEAMS`, and `WEBHOOK`. The API (`data-notification`) only publishes to Kafka (`NotifyService`); `notification-job` only consumes and dispatches to the channel (`ConsumerService`). The API never calls a channel itself, so a send fails when Kafka is not connected.
 - Channels and sources are cached in memory at startup (`bootstrap/load.rs`). Targets are not cached; they are read from Postgres on every use.
 - Protected API routes use the `api-key` header. `GET /health` is public.
-- Internal callers can use gRPC instead: `notification.v1.Notification/Notify` (`proto/notification.proto`, served from `src/grpc/` on `server.grpc.port`). It runs the same flow as `POST /notification/notify` and checks the `api-key` metadata entry. Keep the HTTP handler and the gRPC handler in step when the send flow changes.
+- Internal callers can use gRPC instead: `notification.v1.Notification/Notify` (`proto/notification.proto`, served from `src/grpc/` on `server.grpc.port`). It runs the same flow as `POST /notification/noti/notify` and checks the `api-key` metadata entry. Keep the HTTP handler and the gRPC handler in step when the send flow changes.
 
 Default listen address is `0.0.0.0:8080` (see `app.yaml` and environment overrides).
 
@@ -71,7 +71,7 @@ Write SQL as raw string literals (`r#"..."#`), one clause per line, with the ope
 | Method | Path | Auth |
 |---|---|---|
 | `GET` | `/health` | Public |
-| `POST` | `/notification/notify` | `api-key` |
+| `POST` | `/notification/noti/notify` | `api-key` |
 | `GET` | `/notification/sources/{code}` | `api-key` |
 | `POST` | `/notification/sources` | `api-key` |
 | `PATCH` | `/notification/sources/metadata` | `api-key` |
@@ -79,6 +79,8 @@ Write SQL as raw string literals (`r#"..."#`), one clause per line, with the ope
 | `POST` | `/notification/targets` | `api-key` |
 | `PATCH` | `/notification/targets/metadata` | `api-key` |
 | `POST` | `/notification/templates` | `api-key` |
+
+The `/notification` prefix is `server.base_path` in config; `/health` is always at the root. The service uses axum 0.7, so path captures in `src/api/routes.rs` are written `/:code`, not `/{code}`.
 
 There are no create/list/get/update/delete notification routes.
 
