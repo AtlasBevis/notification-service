@@ -1,4 +1,4 @@
-use crate::config;
+use crate::config::Config;
 use crate::models::ApiResponse;
 use axum::response::IntoResponse;
 use axum::{
@@ -8,7 +8,7 @@ use axum::{
 const API_KEY_HEADER: &str = "api-key";
 
 pub async fn auth_middleware(headers: HeaderMap, request: Request, next: Next) -> AxumResponse {
-    let config = config::load();
+    let config = Config::load();
 
     let Some(auth) = &config.auth else {
         return next.run(request).await;

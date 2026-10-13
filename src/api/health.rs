@@ -2,7 +2,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Serialize;
 
-use crate::config;
+use crate::config::Config;
 use crate::models::ApiResponse;
 use crate::state::SharedState;
 
@@ -22,8 +22,8 @@ pub struct HealthResponse {
 }
 
 pub async fn health(State(state): State<SharedState>) -> ApiResponse<HealthResponse> {
-    let server = &config::load().server;
-    let kafka_enabled = config::load().kafka.enabled;
+    let server = &Config::load().server;
+    let kafka_enabled = Config::load().kafka.enabled;
 
     let postgres = match state.postgres.ping().await {
         Ok(()) => DependencyStatus {

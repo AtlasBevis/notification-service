@@ -4,7 +4,7 @@ mod kafka;
 mod postgres;
 mod server;
 
-pub use app::{load, load_config, Config};
+pub use app::Config;
 pub use auth::AuthConfig;
 pub use kafka::KafkaConfig;
 pub use postgres::PostgresConfig;

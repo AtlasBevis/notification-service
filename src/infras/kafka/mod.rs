@@ -14,8 +14,7 @@ use tokio::sync::Mutex;
 use tokio::time::sleep;
 use tracing::Instrument;
 
-use crate::config;
-use crate::config::KafkaConfig;
+use crate::config::{Config, KafkaConfig};
 
 /// Kafka produce/consume helper (rskafka, partition-aware, key = correlation_id).
 #[derive(Clone)]
@@ -283,7 +282,7 @@ where
     H: Fn(String, i32, i64, Option<Vec<u8>>) -> Fut,
     Fut: Future<Output = ()>,
 {
-    let cfg = config::load();
+    let cfg = Config::load();
     let max_wait_ms = cfg.kafka.consumer.max_wait_ms.max(100);
     let max_poll_records = cfg.kafka.consumer.max_poll_records.max(1) as usize;
     let start = start_offset();
@@ -326,7 +325,7 @@ where
 }
 
 fn start_offset() -> StartOffset {
-    if config::load()
+    if Config::load()
         .kafka
         .consumer
         .start_offset

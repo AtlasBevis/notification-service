@@ -1,4 +1,4 @@
-use crate::config;
+use crate::config::Config;
 use crate::enums::Channel;
 use crate::error::{AppError, AppResult};
 use crate::infras::kafka::KafkaBus;
@@ -201,7 +201,7 @@ impl ConsumerService {
 #[async_trait]
 impl ConsumerTrait for ConsumerService {
     async fn consume(self: Arc<Self>) {
-        let topics = vec![config::load().kafka.topics.send.clone()];
+        let topics = vec![Config::load().kafka.topics.send.clone()];
         let svc = self.clone();
 
         self.kafka

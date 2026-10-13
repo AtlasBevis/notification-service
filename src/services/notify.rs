@@ -1,4 +1,4 @@
-use crate::config;
+use crate::config::Config;
 use crate::enums::Channel;
 use crate::error::{AppError, AppResult};
 use crate::infras::kafka::KafkaBus;
@@ -254,7 +254,7 @@ impl NotifyTrait for NotifyService {
         msg.value.notification_id = accepted.id;
         msg.value.delivery_id = accepted.delivery_id;
 
-        let topic = config::load().kafka.topics.send.clone();
+        let topic = Config::load().kafka.topics.send.clone();
         let value = &msg.value;
         match kafka
             .publish_json(

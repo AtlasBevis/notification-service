@@ -3,7 +3,6 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize)]
 pub struct AuthConfig {
     pub enabled: bool,
-    #[serde(default)]
     pub api_key: String,
 }
 

@@ -1,5 +1,5 @@
 use data_notification::bootstrap;
-use data_notification::config::load_config;
+use data_notification::config::Config;
 use data_notification::error::{AppError, AppResult};
 use data_notification::metrics;
 
@@ -10,7 +10,7 @@ async fn main() -> AppResult<()> {
     bootstrap::init_tracing();
     tracing::info!("[Job] running...");
 
-    let config = load_config(JOB_CONFIG_FILE)?;
+    let config = Config::set(Config::new(JOB_CONFIG_FILE)?)?;
     tracing::info!(version = %config.server.version, "Config loaded");
 
     if !config.kafka.consumer_enabled() {
@@ -21,7 +21,7 @@ async fn main() -> AppResult<()> {
 
     metrics::init(&config.server)?;
 
-    let state = bootstrap::build_state(&config)
+    let state = bootstrap::build_state(config)
         .await
         .map_err(|e| AppError::internal_with("Failed to start notification-job", e))?;
     let consumer = state

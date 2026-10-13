@@ -78,6 +78,8 @@ There are no create/list/get/update/delete notification routes.
 ## Configuration
 
 - The API loads `app.yaml` and `notification-job` loads `app-job.yaml`; `CONFIG_PATH` overrides either.
+- Config structs have no serde defaults: every field must be present in `app.yaml` / `app-job.yaml`, and a missing one fails startup with a parse error (only the `auth` section is optional).
+- Config goes through `Config`: `Config::new(default_path)` reads and parses the file, `Config::set(config)` stores it once at startup, `Config::load()` reads it anywhere. Do not add free functions for config access.
 - `app-job.yaml` sets `kafka.consumer.enabled: true` and its own `kafka.client_id`; the job refuses to start when the consumer is disabled or Kafka is not connected.
-- Non-development secret overrides include `POSTGRES_PASSWORD`, `KAFKA_BROKERS`, `KAFKA_SASL_USERNAME`, and `KAFKA_SASL_PASSWORD`.
+- Secret overrides from env (applied when set) include `POSTGRES_PASSWORD`, `KAFKA_BROKERS`, `KAFKA_SASL_USERNAME`, and `KAFKA_SASL_PASSWORD`.
 - `auth.api_key` comes from config/ConfigMap; do not commit secrets.
