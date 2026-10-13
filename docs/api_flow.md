@@ -31,7 +31,7 @@ sequenceDiagram
     participant Client
     participant API as Notification API
     participant DB as Postgres
-    participant Worker as notification-consumer
+    participant Worker as notification-job
     participant Channel as EMAIL / MSTEAMS / WEBHOOK
 
     Client->>API: POST /notification/notify

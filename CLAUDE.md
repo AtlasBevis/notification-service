@@ -46,6 +46,14 @@ Keep handlers thin: parse/normalize/validate requests, call a service trait, and
 
 Repositories own SQL and return domain models. Put all PostgreSQL `Row` to model conversion and persisted-value parsing in the corresponding model's `map_row(&Row) -> AppResult<Self>` method; repository methods should query rows and call that mapper rather than reading columns themselves.
 
+## Error handling
+
+- Every fallible function returns `AppResult<T>` (`Result<T, AppError>`, defined in `src/error.rs`). Do not use bare `Result<T, E>`, `Result<T, String>`, or `anyhow::Result`; `anyhow` is not a dependency. This applies to all layers, including `infras/`, `config/`, `bootstrap/`, and both `main` functions.
+- Build errors with `AppError::bad_request` / `not_found` / `conflict` / `internal`. Wrap a foreign error with `AppError::internal_with("what failed", err)`, or add a `From` impl in `src/error.rs` when `?` should convert it directly.
+- Validation methods such as `validate()` return `AppResult<()>` with `AppError::bad_request`; handlers turn the error into a response with `err.to_response()`.
+- A function that cannot fail returns the value itself, not a `Result`.
+- Exceptions are only signatures dictated by an external trait: `FromRequest::from_request`, `std::fmt::Result`, and `reqwest_middleware::Result` in the HTTP middleware.
+
 ## Routes
 
 | Method | Path | Auth |

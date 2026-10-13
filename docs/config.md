@@ -18,4 +18,4 @@ Main sections: `server`, `auth`, `postgres`, `kafka`, `notification`.
 - `teams.url` (or env `TEAMS_URL`): Teams webhook URL.
 - `email.username` / `email.password` (or env `EMAIL_USERNAME` / `EMAIL_PASSWORD`): SMTP credentials. Recipients come from the request. SMTP host from env `SMTP_HOST` (default `smtp.office365.com`).
 
-Templates live in Postgres (`templates` table), loaded into memory at API/consumer startup — not from the filesystem.
+Templates live in Postgres (`templates` table), loaded into memory at API/job startup — not from the filesystem.

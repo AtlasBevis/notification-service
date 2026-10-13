@@ -9,23 +9,23 @@ ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse \
 # Layer 1: dependency cache (invalidates only when Cargo.lock changes)
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir -p src/bin && echo "fn main() {}" > src/main.rs && \
-    echo "fn main() {}" > src/bin/notification_consumer.rs && \
+    echo "fn main() {}" > src/bin/notification_job.rs && \
     cargo build --release --locked && \
-    rm -f target/release/data-notification target/release/notification-consumer \
-    target/release/deps/data_notification* target/release/deps/notification_consumer*
+    rm -f target/release/data-notification target/release/notification-job \
+    target/release/deps/data_notification* target/release/deps/notification_job*
 
 # Layer 2: application source (rebuilds only app code)
 COPY src ./src
-RUN cargo build --release --locked --bin data-notification --bin notification-consumer && \
+RUN cargo build --release --locked --bin data-notification --bin notification-job && \
     install -m 0755 target/release/data-notification /tmp/data-notification && \
-    install -m 0755 target/release/notification-consumer /tmp/notification-consumer
+    install -m 0755 target/release/notification-job /tmp/notification-job
 
 FROM debian:oracle-slim-v2 AS runtime
 
 WORKDIR /app
 
 COPY --from=builder /tmp/data-notification ./data-notification
-COPY --from=builder /tmp/notification-consumer ./notification-consumer
+COPY --from=builder /tmp/notification-job ./notification-job
 COPY templates ./templates
 
 EXPOSE 8080 9090

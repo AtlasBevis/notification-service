@@ -67,25 +67,25 @@ pub async fn run_api() -> AppResult<()> {
     Ok(())
 }
 
-/// Kafka worker: `notification-consumer` binary. Dispatch TEAMS / EMAIL.
-pub async fn run_notification_consumer() -> AppResult<()> {
+/// Kafka worker: `notification-job` binary. Dispatch TEAMS / EMAIL.
+pub async fn run_notification_job() -> AppResult<()> {
     init_tracing();
-    tracing::info!("Starting notification-consumer...");
+    tracing::info!("[Job] running...");
 
     let config = load_config()?;
     tracing::info!(version = %config.server.version, "Config loaded");
 
     if !config.kafka.consumer_enabled() {
         return Err(AppError::internal(
-            "kafka.enabled and kafka.consumer.enabled must be true for notification-consumer",
+            "kafka.enabled and kafka.consumer.enabled must be true for notification-job",
         ));
     }
 
     metrics::init(&config.server)?;
 
-    let service = bootstrap::build_notification_consumer(&config)
+    let service = bootstrap::build_notification_job(&config)
         .await
-        .map_err(|e| AppError::internal_with("Failed to start notification-consumer", e))?;
+        .map_err(|e| AppError::internal_with("Failed to start notification-job", e))?;
     service.run_consumers().await;
-    Err(AppError::internal("notification-consumer stopped"))
+    Err(AppError::internal("notification-job stopped"))
 }

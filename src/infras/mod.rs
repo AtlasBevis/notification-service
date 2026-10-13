@@ -33,7 +33,7 @@ impl Infrastructure {
     }
 
     pub async fn new_require_kafka(config: &Config) -> AppResult<Self> {
-        tracing::info!("Initializing infrastructure (notification-consumer)...");
+        tracing::info!("Initializing infrastructure (notification-job)...");
 
         let http_client = Self::init_http_client(&config.server.http)?;
         let postgres = Self::init_postgres(&config.postgres).await?;
@@ -50,7 +50,7 @@ impl Infrastructure {
         if !config.kafka.enabled {
             if required {
                 return Err(AppError::internal(
-                    "kafka.enabled must be true for notification-consumer",
+                    "kafka.enabled must be true for notification-job",
                 ));
             }
             tracing::info!("Kafka is disabled");

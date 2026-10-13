@@ -1,7 +1,7 @@
 use chrono::Utc;
 use deadpool_postgres::Pool;
 
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
 
 #[derive(Clone)]
 pub struct DeliveriesRepository {

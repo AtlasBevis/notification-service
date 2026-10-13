@@ -84,13 +84,13 @@ pub async fn build_state(config: &Config) -> AppResult<SharedState> {
     }))
 }
 
-/// Worker process `notification-consumer`.
-pub async fn build_notification_consumer(config: &Config) -> AppResult<Arc<NotifyService>> {
+/// Worker process `notification-job`.
+pub async fn build_notification_job(config: &Config) -> AppResult<Arc<NotifyService>> {
     let infras = Infrastructure::new_require_kafka(config).await?;
     let kafka = infras
         .kafka
         .clone()
-        .ok_or_else(|| AppError::internal("Kafka is required for notification-consumer"))?;
+        .ok_or_else(|| AppError::internal("Kafka is required for notification-job"))?;
     let pool = infras.postgres.pool();
 
     let sources_service = Arc::new(SourceService::new(SourceRepository::new(pool.clone())));

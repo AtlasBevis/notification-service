@@ -13,4 +13,5 @@ mod services;
 mod state;
 mod utils;
 
-pub use app::{run_api, run_notification_consumer};
+pub use app::{run_api, run_notification_job};
+pub use error::AppResult;
