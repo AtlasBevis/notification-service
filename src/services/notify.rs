@@ -164,7 +164,10 @@ impl NotifyService {
 #[async_trait]
 impl NotifyTrait for NotifyService {
     async fn validate(&self, request: NotifyRequest) -> AppResult<NotifyMessage> {
+        // check source
         let source = self.sources.get_active_by_code(&request.source).await?;
+
+        // check definition
         let definition = self.definitions.get_active_by_code(&request.code).await?;
         if definition.source_id != source.id {
             return Err(AppError::bad_request(format!(
@@ -173,6 +176,7 @@ impl NotifyTrait for NotifyService {
             )));
         }
 
+        // check channel
         let channel = self
             .channels
             .get_active_by_id(definition.channel_id)
