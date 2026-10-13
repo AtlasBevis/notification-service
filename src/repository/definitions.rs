@@ -4,7 +4,7 @@ use crate::{error::AppResult, models::DefinitionData};
 
 use crate::error::AppError;
 
-const COLUMNS: &str = "d.id, d.code, d.name, d.status, d.description, d.level, d.source_id, d.channel_id, d.template_id, d.created_at, d.updated_at, (SELECT COALESCE(jsonb_agg(jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id) ORDER BY dt.id), '[]'::jsonb) FROM definition_targets dt WHERE dt.definition_id = d.id) AS targets";
+const COLUMNS: &str = "d.id, d.code, d.name, d.status, d.description, d.level, d.source_id, d.channel_id, d.created_at, d.updated_at, (SELECT COALESCE(jsonb_agg(jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id) ORDER BY dt.id), '[]'::jsonb) FROM definition_targets dt WHERE dt.definition_id = d.id) AS targets";
 
 #[derive(Clone)]
 pub struct DefinitionRepository {

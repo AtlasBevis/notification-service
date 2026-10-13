@@ -264,22 +264,17 @@ impl NotifyService {
         let channel_code = channel.code.as_str();
         let is_webhook = channel.code == Channel::WEBHOOK;
 
-        // Each target uses its own template when set, otherwise the definition's.
+        // Every WEBHOOK target sends its own template as the request body.
         let mut resolved: HashMap<i32, TemplateData> = HashMap::new();
         let mut target_payloads = Vec::new();
-        let mut first_template_id = definition.template_id;
         if is_webhook {
             for target in &definition.targets {
-                let template_id =
-                    target
-                        .template_id
-                        .or(definition.template_id)
-                        .ok_or_else(|| {
-                            AppError::bad_request(format!(
-                                "definition `{}` target `{}` has no template",
-                                definition.code, target.target_id
-                            ))
-                        })?;
+                let template_id = target.template_id.ok_or_else(|| {
+                    AppError::bad_request(format!(
+                        "definition `{}` target `{}` has no template",
+                        definition.code, target.target_id
+                    ))
+                })?;
                 if !resolved.contains_key(&template_id) {
                     let template = self.templates.get_active_by_id(template_id).await?;
                     resolved.insert(template_id, template);
@@ -288,12 +283,15 @@ impl NotifyService {
                     target_id: target.target_id,
                     payload: resolved[&template_id].json_payload()?,
                 });
-                first_template_id.get_or_insert(template_id);
             }
         }
 
-        // Title and body recorded on the delivery come from the definition's
-        // template, or the first target's when a WEBHOOK definition has none.
+        // Title and body recorded on the delivery come from the first target
+        // that has a template.
+        let first_template_id = definition
+            .targets
+            .iter()
+            .find_map(|target| target.template_id);
         let template_id = first_template_id.ok_or_else(|| {
             AppError::bad_request(format!("definition `{}` has no template", definition.code))
         })?;

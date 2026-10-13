@@ -13,14 +13,13 @@ CREATE TABLE definitions (
   level             VARCHAR(20)  NOT NULL DEFAULT 'INFO',
   
   source_id         INT   NOT NULL REFERENCES sources (id),
-  channel_id        INT   NOT NULL REFERENCES channels (id),
-  template_id       INT   REFERENCES templates (id)
+  channel_id        INT   NOT NULL REFERENCES channels (id)
 );
 
 -- A definition may deliver to multiple destination groups on its channel.
--- template_id overrides definitions.template_id for that target; NULL uses the
--- definition's template. WEBHOOK targets use it to send a different request body
--- (a format = 'JSON' template) per target.
+-- template_id is the template rendered for that target. Every WEBHOOK target
+-- needs one (a format = 'JSON' template, sent as that target's request body).
+-- EMAIL / MSTEAMS render one message from the first target that has a template.
 CREATE TABLE definition_targets (
   id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   definition_id       BIGINT NOT NULL REFERENCES definitions (id) ON DELETE CASCADE,

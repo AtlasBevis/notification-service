@@ -17,6 +17,8 @@ pub struct Config {
     pub kafka: KafkaConfig,
 }
 
+const CONFIG_PATH: &str = "CONFIG_PATH";
+
 impl Config {
     fn new_from_yaml(content: &str) -> Result<Self> {
         serde_yaml::from_str(content).context("Failed to parse YAML")
@@ -26,7 +28,7 @@ impl Config {
     ///
     /// - `CONFIG_PATH` (default `config.yaml`)
     pub fn load_from_env() -> Result<Self> {
-        let config_path = get_env("CONFIG_PATH").unwrap_or_else(|| "config.yaml".to_string());
+        let config_path = get_env(CONFIG_PATH).unwrap_or_else(|| "config.yaml".to_string());
 
         tracing::info!("CONFIG_PATH={} => loading config", config_path);
         let content = fs::read_to_string(&config_path).context("Failed to read config file")?;

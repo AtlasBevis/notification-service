@@ -18,14 +18,14 @@ Get-ChildItem migration\*.sql | Sort-Object Name | ForEach-Object {
 | `002_channels.sql` | Delivery channel catalog |
 | `003_targets.sql` | Reusable destination groups for EMAIL, MSTEAMS, and WEBHOOK |
 | `004_templates.sql` | `templates` (name, status) and `template_versions` (versioned title, content, format; `JSON` format is a webhook body) |
-| `005_definitions.sql` | `code` to source/channel/template mapping and definition-to-target groups |
+| `005_definitions.sql` | `code` to source/channel mapping, and definition-to-target groups with the template per target |
 | `006_notifications.sql` | Accepted request and trace ID uniqueness |
 | `007_deliveries.sql` | Rendered message and current delivery state |
 | `008_delivery_attempts.sql` | Dispatch attempt history |
 | `009_webhook_config.sql` | Webhook endpoint configuration linked to a target |
 | `010_webhook_auth_configs.sql` | Static or token endpoint authentication per webhook target |
 
-After the migrations, create target groups with the matching `channel_id`, then link one or more targets to each definition through `definition_targets`. EMAIL target metadata contains recipient arrays (`to`, `cc`, `bcc`); all selected groups are combined into one email. Each MSTEAMS target contains its Teams webhook URL and is sent separately. Each WEBHOOK target has one `webhook_configs` row, with its own endpoint, headers, and `webhook_auth_configs` row. The webhook body is a `format = 'JSON'` template version: `definition_targets.template_id` selects it for that target, and falls back to `definitions.template_id` when NULL. String placeholders such as `{{date_key}}` are filled from the notify request's `variables`. For example, the template content can be `{"requestId":"{{requestId}}","data":{"date_key":"{{date_key}}"}}`. The worker sends each target its own rendered payload and records one aggregate delivery result.
+After the migrations, create target groups with the matching `channel_id`, then link one or more targets to each definition through `definition_targets`. EMAIL target metadata contains recipient arrays (`to`, `cc`, `bcc`); all selected groups are combined into one email. Each MSTEAMS target contains its Teams webhook URL and is sent separately. Each WEBHOOK target has one `webhook_configs` row, with its own endpoint, headers, and `webhook_auth_configs` row. The webhook body is a `format = 'JSON'` template version: `definition_targets.template_id` selects it for that target and is required for every WEBHOOK target (`definitions` has no template column). EMAIL and MSTEAMS render one message from the first linked target that has a `template_id`. String placeholders such as `{{date_key}}` are filled from the notify request's `variables`. For example, the template content can be `{"requestId":"{{requestId}}","data":{"date_key":"{{date_key}}"}}`. The worker sends each target its own rendered payload and records one aggregate delivery result.
 
 ## Runtime lifecycle
 

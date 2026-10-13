@@ -15,7 +15,6 @@ pub struct DefinitionData {
     pub source_id: i32,
     pub channel_id: i32,
     pub targets: Vec<DefinitionTarget>,
-    pub template_id: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
@@ -40,7 +39,6 @@ impl DefinitionData {
             targets: serde_json::from_value(row.get("targets")).map_err(|error| {
                 AppError::internal(format!("invalid definition target mapping: {error}"))
             })?,
-            template_id: row.get("template_id"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
             updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
         })

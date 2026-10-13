@@ -1,4 +1,4 @@
--- templates is the stable identity a definition points at (definitions.template_id).
+-- templates is the stable identity a definition target points at (definition_targets.template_id).
 -- template_versions holds the renderable content; a send uses the latest ACTIVE version.
 -- format: TEXT / HTML for EMAIL, ADAPTIVE_CARD for MSTEAMS, JSON for WEBHOOK
 -- (content is the request body object; {{variable}} placeholders are filled from
