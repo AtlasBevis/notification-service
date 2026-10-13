@@ -28,4 +28,4 @@ Every fallible function returns `AppResult<T>` from `src/error.rs` — services,
 Handlers are the one place that does not return `AppResult`: they convert it to `ApiResponse`.
 
 ## Why do this?
-- Handlers stay thin; composition root stays in `src/bootstrap/mod.rs`.
+- Handlers stay thin; composition root stays in `src/bootstrap/` (`build.rs` wires services, `load.rs` loads the channel and source memory caches).

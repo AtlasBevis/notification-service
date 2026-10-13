@@ -40,14 +40,9 @@ sequenceDiagram
     API->>API: Render title, body, payload
     API->>DB: Transaction: insert notification + delivery
     API-->>Client: 202 Accepted
-    alt Kafka enabled
-        API->>Worker: Publish notification.send
-        Worker->>Channel: Dispatch (webhook endpoint called once)
-        Worker->>DB: Record attempts and delivery result
-    else Kafka disabled
-        API->>Channel: Dispatch directly
-        API->>DB: Record dispatch result
-    end
+    API->>Worker: Publish notification.send
+    Worker->>Channel: Dispatch (webhook endpoint called once)
+    Worker->>DB: Record attempts and delivery result
 ```
 
 ## Request
@@ -99,7 +94,7 @@ For `TOKEN_ENDPOINT`, set `auth_mode = 'TOKEN_ENDPOINT'`, provide `token_url`, `
 | Another retry will run | `RETRY_WAIT` | `FAILED` or `TIMEOUT` |
 | Retries exhausted | `FAILED` | `FAILED` or `TIMEOUT` |
 
-Webhook method and timeout come from `webhook_configs`. Each webhook delivery calls its endpoint once; token endpoint mode may make a separate request to obtain an expired or missing token. Kafka enabled means the API publishes for asynchronous dispatch; otherwise the API dispatches directly. Non-webhook Kafka deliveries retain the worker retry behavior.
+Webhook method and timeout come from `webhook_configs`. Each webhook delivery calls its endpoint once; token endpoint mode may make a separate request to obtain an expired or missing token. The API only publishes to Kafka and never calls a channel itself; `notification-job` consumes the topic and dispatches. If Kafka is not connected the send request fails before anything is recorded. Non-webhook deliveries retain the worker retry behavior.
 
 ## Routes
 

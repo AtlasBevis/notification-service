@@ -35,7 +35,7 @@ POST /notification/notify
   -> render the template's latest ACTIVE version
   -> transactionally insert notifications + deliveries
   -> return 202 Accepted
-  -> dispatch through Kafka consumer, or directly when Kafka is disabled
+  -> API publishes to Kafka; notification-job consumes and dispatches
   -> update delivery state and append delivery_attempts
 ```
 

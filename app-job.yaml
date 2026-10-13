@@ -1,7 +1,7 @@
 server:
   host: "0.0.0.0"
   port: 8080
-  profile: dev
+  profile: job
   admin: af72afa2-7a70-4a2f-93ac-905d36044526
   version: "0.1.0"
   metrics:
@@ -26,7 +26,7 @@ kafka:
   enabled: true
   brokers:
     - "localhost:9092"
-  client_id: "notification"
+  client_id: "notification-job"
   sasl:
     mechanism: SASL_PLAINTEXT
     username: "notification"

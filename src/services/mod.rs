@@ -1,4 +1,5 @@
 pub mod channel;
+pub mod consumer;
 pub mod definition;
 pub mod delivery;
 pub mod email;
@@ -11,6 +12,7 @@ pub mod template;
 pub mod webhook;
 
 pub use channel::{ChannelService, ChannelTrait};
+pub use consumer::{ConsumerService, ConsumerTrait};
 pub use definition::{DefinitionService, DefinitionTrait};
 pub use delivery::{DeliveryService, DeliveryTrait};
 pub use email::{EmailService, EmailTrait};

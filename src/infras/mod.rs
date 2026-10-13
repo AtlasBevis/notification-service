@@ -1,5 +1,5 @@
 use crate::config::{Config, HttpConfig, PostgresConfig};
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
 use std::sync::Arc;
 
 pub mod http;
@@ -23,7 +23,7 @@ impl Infrastructure {
 
         let http_client = Self::init_http_client(&config.server.http)?;
         let postgres = Self::init_postgres(&config.postgres).await?;
-        let kafka = Self::init_kafka(config, false).await?;
+        let kafka = Self::init_kafka(config).await;
 
         Ok(Self {
             http_client,
@@ -32,39 +32,19 @@ impl Infrastructure {
         })
     }
 
-    pub async fn new_require_kafka(config: &Config) -> AppResult<Self> {
-        tracing::info!("Initializing infrastructure (notification-job)...");
-
-        let http_client = Self::init_http_client(&config.server.http)?;
-        let postgres = Self::init_postgres(&config.postgres).await?;
-        let kafka = Self::init_kafka(config, true).await?;
-
-        Ok(Self {
-            http_client,
-            postgres,
-            kafka,
-        })
-    }
-
-    async fn init_kafka(config: &Config, required: bool) -> AppResult<Option<Arc<KafkaBus>>> {
+    async fn init_kafka(config: &Config) -> Option<Arc<KafkaBus>> {
         if !config.kafka.enabled {
-            if required {
-                return Err(AppError::internal(
-                    "kafka.enabled must be true for notification-job",
-                ));
-            }
             tracing::info!("Kafka is disabled");
-            return Ok(None);
+            return None;
         }
         match KafkaBus::connect(&config.kafka).await {
             Ok(bus) => {
                 tracing::info!(brokers = ?config.kafka.brokers, "Kafka connected");
-                Ok(Some(Arc::new(bus)))
+                Some(Arc::new(bus))
             }
-            Err(err) if required => Err(err),
             Err(err) => {
-                tracing::error!(error = %err, "Kafka unavailable; notification APIs will return 503");
-                Ok(None)
+                tracing::error!(error = %err, "Kafka unavailable");
+                None
             }
         }
     }

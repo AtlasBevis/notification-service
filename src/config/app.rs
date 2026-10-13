@@ -5,6 +5,7 @@ use serde::Deserialize;
 use std::fs;
 use std::sync::OnceLock;
 
+const CONFIG_PATH: &str = "CONFIG_PATH";
 static CONFIG: OnceLock<Config> = OnceLock::new();
 static PROFILE: OnceLock<String> = OnceLock::new();
 
@@ -17,19 +18,18 @@ pub struct Config {
     pub kafka: KafkaConfig,
 }
 
-const CONFIG_PATH: &str = "CONFIG_PATH";
-
 impl Config {
     fn new_from_yaml(content: &str) -> AppResult<Self> {
         serde_yaml::from_str(content)
             .map_err(|e| AppError::internal_with("Failed to parse YAML", e))
     }
 
-    /// Resolve profile + config path from env, then load config.
+    /// Resolve the config path, then load config and init the profile.
     ///
-    /// - `CONFIG_PATH` (default `config.yaml`)
-    pub fn load_from_env() -> AppResult<Self> {
-        let config_path = get_env(CONFIG_PATH).unwrap_or_else(|| "config.yaml".to_string());
+    /// - `CONFIG_PATH`, otherwise `default_path` (`app.yaml` for the API,
+    ///   `app-job.yaml` for `notification-job`)
+    pub fn load_from_env(default_path: &str) -> AppResult<Self> {
+        let config_path = get_env(CONFIG_PATH).unwrap_or_else(|| default_path.to_string());
 
         tracing::info!("CONFIG_PATH={} => loading config", config_path);
         let content = fs::read_to_string(&config_path)
@@ -37,9 +37,7 @@ impl Config {
         let mut config = Self::new_from_yaml(&content)?;
         init_profile(config.server.profile.clone());
 
-        if config.server.profile != "dev" {
-            apply_secrets(&mut config);
-        }
+        apply_secrets(&mut config);
 
         set(config.clone());
         Ok(config)
@@ -69,13 +67,12 @@ pub fn init_profile(profile: impl Into<String>) {
     }
 }
 
-/// Current runtime profile (`dev` | `uat` | `prod`, ...). Defaults to `dev`.
 pub fn profile() -> &'static str {
-    PROFILE.get().map(String::as_str).unwrap_or("dev")
+    PROFILE.get().map(String::as_str).unwrap_or("app")
 }
 
-pub fn load_config() -> AppResult<Config> {
-    Config::load_from_env()
+pub fn load_config(default_path: &str) -> AppResult<Config> {
+    Config::load_from_env(default_path)
 }
 
 /// Override sensitive fields from env when set (non-empty).
