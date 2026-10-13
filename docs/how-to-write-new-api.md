@@ -27,5 +27,8 @@ Every fallible function returns `AppResult<T>` from `src/error.rs` — services,
 
 Handlers are the one place that does not return `AppResult`: they convert it to `ApiResponse`.
 
+## Testing
+Write unit tests to verify the change and run them until they pass, then delete them. Tests are not kept in the source: no `#[cfg(test)]` modules, no `tests/` files, no test-only helpers. Say what you tested when you hand the change over.
+
 ## Why do this?
 - Handlers stay thin; composition root stays in `src/bootstrap/` (`build.rs` wires services, `load.rs` loads the channel and source memory caches).

@@ -7,7 +7,7 @@ Each binary loads its own file once at startup with `Config::set(Config::new(def
 | `data-notification` | `src/main.rs` | `app.yaml` | HTTP API; publishes to Kafka |
 | `notification-job` | `src/bin/notification_job.rs` | `app-job.yaml` | Kafka consumer; dispatches to channels |
 
-The two files differ in `server.profile` (`app` / `job`), `kafka.client_id`, and `kafka.consumer.enabled` (`false` for the API, `true` for the job). `client_id` is only a label for broker logs, metrics, and quotas; it does not need to differ, but separate values keep the two processes distinguishable.
+The two files differ in `server.profile` (`app` / `job`), `server.grpc.enabled` (`true` for the API, `false` for the job, which never serves gRPC), `kafka.client_id`, and `kafka.consumer.enabled` (`false` for the API, `true` for the job). `client_id` is only a label for broker logs, metrics, and quotas; it does not need to differ, but separate values keep the two processes distinguishable.
 
 1. Path from env `CONFIG_PATH`, otherwise the binary's default file.
 2. Parse YAML → `Config`. There are no defaults: every field of `server`, `postgres`, and `kafka` must be present, otherwise startup fails with a parse error. Only the `auth` section may be omitted.

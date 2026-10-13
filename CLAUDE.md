@@ -11,6 +11,7 @@ Repository guidance for AI assistants working on this Rust + Axum + Kafka notifi
 - Delivery channels are `EMAIL`, `MSTEAMS`, and `WEBHOOK`. The API (`data-notification`) only publishes to Kafka (`NotifyService`); `notification-job` only consumes and dispatches to the channel (`ConsumerService`). The API never calls a channel itself, so a send fails when Kafka is not connected.
 - Channels and sources are cached in memory at startup (`bootstrap/load.rs`). Targets are not cached; they are read from Postgres on every use.
 - Protected API routes use the `api-key` header. `GET /health` is public.
+- Internal callers can use gRPC instead: `notification.v1.Notification/Notify` (`proto/notification.proto`, served from `src/grpc/` on `server.grpc.port`). It runs the same flow as `POST /notification/notify` and checks the `api-key` metadata entry. Keep the HTTP handler and the gRPC handler in step when the send flow changes.
 
 Default listen address is `0.0.0.0:8080` (see `app.yaml` and environment overrides).
 
@@ -36,6 +37,7 @@ Every webhook config must have a row in `webhook_auth_configs`; a missing row is
 ```text
 src/
   api/          Axum handlers and routes
+  grpc/         tonic server: notify.rs (handler), auth.rs (api-key interceptor), mod.rs (generated code + serve)
   models/       Request, response, and event data
   services/     Business operations; service-to-service dependencies use traits
   repository/   PostgreSQL adapters
@@ -59,6 +61,11 @@ Write SQL as raw string literals (`r#"..."#`), one clause per line, with the ope
 - A function that cannot fail returns the value itself, not a `Result`.
 - Exceptions are only signatures dictated by an external trait: `FromRequest::from_request`, `std::fmt::Result`, and `reqwest_middleware::Result` in the HTTP middleware.
 
+## Testing
+
+- Unit tests are a verification step, not part of the source. Write them to prove a change, run them until they pass, then delete them before finishing. Do not leave `#[cfg(test)]` modules, `tests/` files, or test-only helpers in the repository.
+- Report what was tested and the result when handing the change over, since the tests themselves are gone.
+
 ## Routes
 
 | Method | Path | Auth |
@@ -74,6 +81,8 @@ Write SQL as raw string literals (`r#"..."#`), one clause per line, with the ope
 | `POST` | `/notification/templates` | `api-key` |
 
 There are no create/list/get/update/delete notification routes.
+
+gRPC: `notification.v1.Notification/Notify` on `server.grpc.port` (metadata `api-key`).
 
 ## Configuration
 

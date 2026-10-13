@@ -423,6 +423,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "prost",
  "prost-build",
+ "prost-types",
  "protoc-bin-vendored",
  "reqwest",
  "reqwest-middleware",

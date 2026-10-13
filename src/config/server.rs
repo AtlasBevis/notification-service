@@ -8,6 +8,7 @@ pub struct ServerConfig {
     admin: String,
     pub version: String,
     pub metrics: MetricsConfig,
+    pub grpc: GrpcConfig,
     pub http: HttpConfig,
 }
 
@@ -18,6 +19,9 @@ impl ServerConfig {
     pub fn metrics_addr(&self) -> String {
         format!("{}:{}", self.host, self.metrics.port)
     }
+    pub fn grpc_addr(&self) -> String {
+        format!("{}:{}", self.host, self.grpc.port)
+    }
     pub fn is_admin(&self, client: &str) -> bool {
         self.admin == client
     }
@@ -25,6 +29,13 @@ impl ServerConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct MetricsConfig {
+    pub enabled: bool,
+    port: u16,
+}
+
+/// Internal gRPC API (`data-notification` only).
+#[derive(Debug, Clone, Deserialize)]
+pub struct GrpcConfig {
     pub enabled: bool,
     port: u16,
 }

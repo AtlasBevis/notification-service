@@ -7,6 +7,9 @@ server:
   metrics:
     enabled: true
     port: 9090
+  grpc:
+    enabled: false
+    port: 50051
   http:
     timeout: 60
 

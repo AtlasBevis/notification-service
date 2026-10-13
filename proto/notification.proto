@@ -2,14 +2,31 @@ syntax = "proto3";
 
 package notification.v1;
 
+import "google/protobuf/struct.proto";
+
+// Internal gRPC entry point; same behaviour as `POST /notification/notify`.
+// Callers send the `api-key` metadata entry.
 service Notification {
-  rpc Send(SendRequest) returns (SendReply);
+  // Validate, record and publish one notification.
+  //
+  // Errors: INVALID_ARGUMENT (bad request or configuration), NOT_FOUND
+  // (unknown source / code / target), ALREADY_EXISTS (`source` + `trace_id`
+  // already accepted), UNAUTHENTICATED (missing or wrong `api-key`), INTERNAL.
+  rpc Notify(NotifyRequest) returns (NotifyReply);
 }
 
-message SendRequest {
-  string app = 1;
+message NotifyRequest {
+  // Code of the calling system (`sources.code`).
+  string source = 1;
+  // Notification definition code (`definitions.code`).
+  string code = 2;
+  // Caller's idempotency key; unique per `source`.
+  string trace_id = 3;
+  // Values for the template's `{{key}}` placeholders.
+  google.protobuf.Struct variables = 4;
 }
 
-message SendReply {
-  string message = 1;
+message NotifyReply {
+  // Echo of the accepted request's `trace_id`.
+  string trace_id = 1;
 }

@@ -1,32 +1,80 @@
 # Data Notification
 
-HTTP notification microservice (Rust + Axum + Kafka).
+Service gửi thông báo nội bộ (Rust + Axum + Kafka + Postgres). Các hệ thống khác gọi một API duy nhất để gửi; service lo việc chọn kênh, render nội dung và giao tới `EMAIL`, `MSTEAMS` hoặc `WEBHOOK`.
 
-Caller chỉ gọi `POST /notification/notify` với `source`, `code`, `trace_id` và `variables` để gửi notification. Service tra `definitions`, render template, tự ghi bản ghi runtime vào `notifications` và `deliveries`, rồi gửi qua `EMAIL`, `MSTEAMS` hoặc `WEBHOOK`. Không có API tạo, xem danh sách, cập nhật hoặc xóa notification; `definitions` được cấu hình trong database.
+## Tổng quan
 
-`definitions` liên kết với một hoặc nhiều nhóm đích qua `definition_targets`. EMAIL gộp người nhận từ các nhóm; MSTEAMS gửi riêng tới từng Teams; WEBHOOK gửi riêng tới mỗi target có cấu hình trong `webhook_configs`. Mỗi webhook target có auth riêng (`STATIC` hoặc `TOKEN_ENDPOINT`) và header riêng. Worker ghi kết quả tổng hợp vào `delivery_attempts`.
+Caller gọi `POST /notification/notify` với `source`, `code`, `trace_id` và `variables`. `code` trỏ tới một `definition` đã cấu hình sẵn trong database, từ đó service biết gửi qua kênh nào, tới những target nào, dùng template nào. Không có API tạo, xem, sửa hay xoá notification.
 
-`WebhookService` dùng `HttpClient` chung được tạo bởi `Infrastructure` và inject vào service; cả request webhook lẫn token đều đi qua HTTP client và middleware dùng chung.
+Project build ra hai binary, mỗi binary một vai trò:
 
-- Request flow: [`docs/api_flow.md`](docs/api_flow.md)
-- Database setup: [`migration/FLOW.md`](migration/FLOW.md)
-- Tài liệu khác: [`docs/`](docs/)
-- Hướng dẫn AI: [`CLAUDE.md`](CLAUDE.md)
+| Binary | Config | Vai trò |
+|---|---|---|
+| `data-notification` | `app.yaml` | HTTP API. Validate request, ghi `notifications` + `deliveries`, rồi publish lên Kafka. Không tự gửi ra kênh. |
+| `notification-job` | `app-job.yaml` | Kafka consumer. Đọc topic, gửi ra kênh, retry và ghi kết quả vào `deliveries` / `delivery_attempts`. |
 
-Schema nằm trong [`migration/`](migration/), theo thứ tự:
+```text
+Caller ──POST /notification/notify──► data-notification ──► Kafka ──► notification-job ──► EMAIL / MSTEAMS / WEBHOOK
+                                            │                                │
+                                            └──────────── Postgres ──────────┘
+```
 
-1. `sources`
-2. `channels`
-3. `targets`
-4. `webhook_configs`
-5. `webhook_auth_configs`
-6. `templates`, `template_versions`
-7. `definitions`
-8. `notifications`
-9. `deliveries`
-10. `delivery_attempts`
+API cần Kafka để nhận request: nếu Kafka không kết nối được, lệnh gửi bị từ chối và không ghi gì vào database. `(source, trace_id)` là khoá chống gửi trùng; gửi lại cùng cặp này trả `409 Conflict`.
 
-Webhook configuration is created by migrations `009` and `010`; see [`migration/FLOW.md`](migration/FLOW.md) for the migration order and auth modes.
+## Cấu hình gửi
+
+| Bảng | Ý nghĩa |
+|---|---|
+| `sources` | Hệ thống được phép gọi service |
+| `channels` | Kênh gửi: `EMAIL`, `MSTEAMS`, `WEBHOOK` |
+| `targets` | Nhóm đích dùng lại được, thuộc một kênh |
+| `templates`, `template_versions` | Nội dung có phiên bản, thay `{{key}}` bằng `variables`; luôn dùng phiên bản `ACTIVE` mới nhất |
+| `definitions`, `definition_targets` | `code` → source, kênh, và danh sách target kèm template của từng target |
+| `webhook_configs`, `webhook_auth_configs` | Endpoint, header và cách xác thực (`STATIC` hoặc `TOKEN_ENDPOINT`) của mỗi webhook target |
+
+Cách mỗi kênh dùng target:
+
+- **EMAIL**: gộp người nhận của mọi target thành một email.
+- **MSTEAMS**: gửi riêng tới từng target.
+- **WEBHOOK**: gọi riêng endpoint của từng target. Body là template `JSON` của target đó; target không gắn template thì gửi nguyên `variables` của request.
+
+## API
+
+Mọi route dưới `/notification` cần header `api-key`; `GET /health` là public.
+
+| Method | Path | Mục đích |
+|---|---|---|
+| `GET` | `/health` | Health check |
+| `POST` | `/notification/notify` | Gửi notification |
+| `GET` / `POST` | `/notification/sources/{code}`, `/notification/sources` | Xem / tạo source |
+| `PATCH` | `/notification/sources/metadata` | Sửa metadata của source |
+| `GET` / `POST` | `/notification/targets/{code}`, `/notification/targets` | Xem / tạo target |
+| `PATCH` | `/notification/targets/metadata` | Sửa metadata của target |
+| `POST` | `/notification/templates` | Tạo phiên bản template mới |
+
+Hệ thống nội bộ có thể gọi gRPC thay cho HTTP: `notification.v1.Notification/Notify` ở cổng `50051`, contract tại [`proto/notification.proto`](proto/notification.proto). Luồng xử lý giống hệt `POST /notification/notify`, `api-key` gửi qua metadata. Chi tiết và ví dụ `grpcurl` ở [`docs/api_flow.md`](docs/api_flow.md).
+
+## Chạy local
+
+1. Tạo database và chạy các file trong [`migration/`](migration/) theo thứ tự số (xem [`migration/FLOW.md`](migration/FLOW.md)).
+2. Sửa `app.yaml` và `app-job.yaml` cho khớp Postgres và Kafka của bạn. Mọi field đều bắt buộc; thiếu field thì process dừng khi khởi động.
+3. Chạy hai process:
+
+   ```bash
+   cargo run --bin data-notification
+   cargo run --bin notification-job
+   ```
+
+API lắng nghe HTTP ở `0.0.0.0:8080`, gRPC ở cổng `50051`, metrics Prometheus ở cổng `9090`. Biến môi trường `CONFIG_PATH` ghi đè đường dẫn file config; `POSTGRES_PASSWORD`, `KAFKA_BROKERS`, `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD` ghi đè các giá trị nhạy cảm.
+
+## Tài liệu
+
+- Luồng request và giao nhận: [`docs/api_flow.md`](docs/api_flow.md)
+- Cấu hình: [`docs/config.md`](docs/config.md)
+- Xác thực `api-key`: [`docs/HMAC_AUTH.md`](docs/HMAC_AUTH.md)
+- Thêm API mới và quy ước code: [`docs/how-to-write-new-api.md`](docs/how-to-write-new-api.md)
+- Schema và thứ tự migration: [`migration/FLOW.md`](migration/FLOW.md)
+- Hướng dẫn cho AI assistant: [`CLAUDE.md`](CLAUDE.md)
 
 ---
 

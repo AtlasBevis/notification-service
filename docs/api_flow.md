@@ -84,6 +84,32 @@ WHERE webhook_config_id = <webhook_config_id>;
 
 For `TOKEN_ENDPOINT`, set `auth_mode = 'TOKEN_ENDPOINT'`, provide `token_url`, `token_path`, and the token request fields (`token_method`, `token_body_format`, `request_headers`, `request_body`). `header_name` and `header_prefix` control how the returned token is sent. `expires_in_path` and `default_ttl_seconds` control token caching.
 
+## gRPC (internal)
+
+`data-notification` also serves `notification.v1.Notification/Notify` for internal callers, on `server.grpc.port` (default config: `50051`) when `server.grpc.enabled` is `true`. The contract is [`proto/notification.proto`](../proto/notification.proto). It runs the same flow as `POST /notification/notify`: same validation, same `(source, trace_id)` idempotency, same publish to Kafka.
+
+| | HTTP | gRPC |
+|---|---|---|
+| Auth | header `api-key` | metadata `api-key` |
+| `variables` | JSON object | `google.protobuf.Struct` |
+| Accepted | `202 Accepted` | `OK`, reply echoes `trace_id` |
+| Bad request / invalid configuration | `400` | `INVALID_ARGUMENT` |
+| Unknown source, code, or target | `404` | `NOT_FOUND` |
+| Repeated `(source, trace_id)` | `409` | `ALREADY_EXISTS` |
+| Missing or wrong key | `401` | `UNAUTHENTICATED` |
+| Internal failure (including Kafka not connected) | `500` | `INTERNAL` |
+
+`Struct` carries every number as a double. Whole numbers are converted back to integers, so `20261011` renders as `20261011` in a template, not `20261011.0`; integers beyond 2^53 lose precision and should be sent as strings.
+
+The server is plaintext (no TLS) and does not expose gRPC reflection, so callers need the `.proto` file:
+
+```bash
+grpcurl -plaintext -import-path proto -proto notification.proto \
+  -H 'api-key: <key>' \
+  -d '{"source":"AIRFLOW","code":"AIRFLOW_TASK_FAILED","trace_id":"airflow-etl-customer-20261011","variables":{"dag_id":"etl_customer"}}' \
+  localhost:50051 notification.v1.Notification/Notify
+```
+
 ## Delivery status
 
 `notifications` records the accepted request and has no delivery status. Status is stored on `deliveries`; each dispatch attempt is stored in `delivery_attempts`.

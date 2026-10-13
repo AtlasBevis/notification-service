@@ -3,6 +3,7 @@ pub mod bootstrap;
 pub mod config;
 mod enums;
 pub mod error;
+pub mod grpc;
 mod infras;
 pub mod metrics;
 mod middlewares;

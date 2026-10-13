@@ -15,6 +15,9 @@ RUN mkdir -p src/bin && echo "fn main() {}" > src/main.rs && \
     target/release/deps/data_notification* target/release/deps/notification_job*
 
 # Layer 2: application source (rebuilds only app code)
+# build.rs compiles proto/ into the gRPC code used by src/grpc.
+COPY build.rs ./
+COPY proto ./proto
 COPY src ./src
 RUN cargo build --release --locked --bin data-notification --bin notification-job && \
     install -m 0755 target/release/data-notification /tmp/data-notification && \
@@ -28,6 +31,6 @@ COPY --from=builder /tmp/data-notification ./data-notification
 COPY --from=builder /tmp/notification-job ./notification-job
 COPY templates ./templates
 
-EXPOSE 8080 9090
+EXPOSE 8080 9090 50051
 
 CMD ["./data-notification"]
