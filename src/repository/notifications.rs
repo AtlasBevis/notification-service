@@ -34,10 +34,12 @@ impl NotificationsRepository {
 
         let row = tx
             .query_one(
-                "INSERT INTO notifications (
+                r#"
+                INSERT INTO notifications (
                     public_id, code, trace_id, definition_id, source, variables
-                 ) VALUES ($1,$2,$3,$4,$5,$6)
-                 RETURNING id",
+                ) VALUES ($1,$2,$3,$4,$5,$6)
+                RETURNING id
+                "#,
                 &[
                     &public_id,
                     &code,
@@ -55,11 +57,13 @@ impl NotificationsRepository {
             .ok_or_else(|| AppError::bad_request("no destination"))?;
         let delivery = tx
             .query_one(
-                "INSERT INTO deliveries (
+                r#"
+                INSERT INTO deliveries (
                     notification_id, target_code, channel_code,
                     title, body, payload, destination, updated_at
-                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-                 RETURNING id",
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+                RETURNING id
+                "#,
                 &[
                     &notification_id,
                     &draft.target_code,

@@ -18,8 +18,10 @@ impl ChannelRepository {
         let client = self.pool.get().await?;
         let rows = client
             .query(
-                "SELECT id, code, name, status, metadata, created_at, updated_at
-                 FROM channels",
+                r#"
+                SELECT id, code, name, status, metadata, created_at, updated_at
+                FROM channels
+                "#,
                 &[],
             )
             .await?;
@@ -31,8 +33,11 @@ impl ChannelRepository {
         let key = code.trim().to_ascii_uppercase();
         let row = client
             .query_opt(
-                "SELECT id, code, name, status, metadata, created_at, updated_at
-                 FROM channels WHERE code = $1",
+                r#"
+                SELECT id, code, name, status, metadata, created_at, updated_at
+                FROM channels
+                WHERE code = $1
+                "#,
                 &[&key],
             )
             .await?;
@@ -44,8 +49,11 @@ impl ChannelRepository {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT id, code, name, status, metadata, created_at, updated_at
-                 FROM channels WHERE id = $1",
+                r#"
+                SELECT id, code, name, status, metadata, created_at, updated_at
+                FROM channels
+                WHERE id = $1
+                "#,
                 &[&id],
             )
             .await?;

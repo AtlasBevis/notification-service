@@ -46,6 +46,8 @@ Keep handlers thin: parse/normalize/validate requests, call a service trait, and
 
 Repositories own SQL and return domain models. Put all PostgreSQL `Row` to model conversion and persisted-value parsing in the corresponding model's `map_row(&Row) -> AppResult<Self>` method; repository methods should query rows and call that mapper rather than reading columns themselves.
 
+Write SQL as raw string literals (`r#"..."#`), one clause per line, with the opening and closing delimiters on their own lines.
+
 ## Error handling
 
 - Every fallible function returns `AppResult<T>` (`Result<T, AppError>`, defined in `src/error.rs`). Do not use bare `Result<T, E>`, `Result<T, String>`, or `anyhow::Result`; `anyhow` is not a dependency. This applies to all layers, including `infras/`, `config/`, `bootstrap/`, and both `main` functions.

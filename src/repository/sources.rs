@@ -20,8 +20,10 @@ impl SourceRepository {
         let client = self.pool.get().await?;
         let rows = client
             .query(
-                "SELECT id, code, name, status, metadata, created_at, updated_at
-                  FROM sources",
+                r#"
+                SELECT id, code, name, status, metadata, created_at, updated_at
+                FROM sources
+                "#,
                 &[],
             )
             .await?;
@@ -32,9 +34,11 @@ impl SourceRepository {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT id, code, name, status, metadata, created_at, updated_at
-                    FROM sources
-                    WHERE code = $1",
+                r#"
+                SELECT id, code, name, status, metadata, created_at, updated_at
+                FROM sources
+                WHERE code = $1
+                "#,
                 &[&code],
             )
             .await?;
@@ -48,9 +52,11 @@ impl SourceRepository {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT id, code, name, status, metadata, created_at, updated_at
-                    FROM sources
-                    WHERE id = $1",
+                r#"
+                SELECT id, code, name, status, metadata, created_at, updated_at
+                FROM sources
+                WHERE id = $1
+                "#,
                 &[&id],
             )
             .await?;
@@ -65,9 +71,11 @@ impl SourceRepository {
 
         let row = client
             .query_one(
-                "INSERT INTO sources (code, name, status, metadata, updated_at)
-                 VALUES ($1, $2, $3, $4, $5)
-                 RETURNING id, code, name, status, metadata, created_at, updated_at",
+                r#"
+                INSERT INTO sources (code, name, status, metadata, updated_at)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id, code, name, status, metadata, created_at, updated_at
+                "#,
                 &[
                     &req.code,
                     &req.name,
@@ -89,10 +97,12 @@ impl SourceRepository {
 
         let n = client
             .execute(
-                "UPDATE sources
-                 SET metadata = $2,
-                     updated_at = $3
-                 WHERE code = $1",
+                r#"
+                UPDATE sources
+                SET metadata = $2,
+                    updated_at = $3
+                WHERE code = $1
+                "#,
                 &[&code, &Value::Object(metadata.clone()), &Utc::now()],
             )
             .await?;

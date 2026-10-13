@@ -23,10 +23,12 @@ impl TargetsRepository {
         let client = self.pool.get().await?;
         let rows = client
             .query(
-                "SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
-                        t.metadata, t.created_at, t.updated_at
-                 FROM targets t
-                 JOIN channels c ON c.id = t.channel_id",
+                r#"
+                SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
+                       t.metadata, t.created_at, t.updated_at
+                FROM targets t
+                JOIN channels c ON c.id = t.channel_id
+                "#,
                 &[],
             )
             .await?;
@@ -37,11 +39,13 @@ impl TargetsRepository {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
-                        t.metadata, t.created_at, t.updated_at
-                 FROM targets t
-                 JOIN channels c ON c.id = t.channel_id
-                 WHERE t.code = $1",
+                r#"
+                SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
+                       t.metadata, t.created_at, t.updated_at
+                FROM targets t
+                JOIN channels c ON c.id = t.channel_id
+                WHERE t.code = $1
+                "#,
                 &[&code],
             )
             .await?;
@@ -53,11 +57,13 @@ impl TargetsRepository {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
-                        t.metadata, t.created_at, t.updated_at
-                 FROM targets t
-                 JOIN channels c ON c.id = t.channel_id
-                 WHERE t.id = $1",
+                r#"
+                SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
+                       t.metadata, t.created_at, t.updated_at
+                FROM targets t
+                JOIN channels c ON c.id = t.channel_id
+                WHERE t.id = $1
+                "#,
                 &[&id],
             )
             .await?;
@@ -70,15 +76,17 @@ impl TargetsRepository {
 
         let row = client
             .query_one(
-                "WITH inserted AS (
+                r#"
+                WITH inserted AS (
                     INSERT INTO targets (code, channel_id, name, status, metadata, updated_at)
                     VALUES ($1, (SELECT id FROM channels WHERE code = $2), $3, $4, $5, $6)
                     RETURNING id, code, channel_id, name, status, metadata, created_at, updated_at
-                 )
-                 SELECT i.id, i.code, c.code AS channel_code, i.name, i.status,
-                        i.metadata, i.created_at, i.updated_at
-                 FROM inserted i
-                 JOIN channels c ON c.id = i.channel_id",
+                )
+                SELECT i.id, i.code, c.code AS channel_code, i.name, i.status,
+                       i.metadata, i.created_at, i.updated_at
+                FROM inserted i
+                JOIN channels c ON c.id = i.channel_id
+                "#,
                 &[
                     &req.code,
                     &req.channel_code,
@@ -101,10 +109,12 @@ impl TargetsRepository {
 
         let n = client
             .execute(
-                "UPDATE targets
-                 SET metadata = $2,
-                     updated_at = $3
-                 WHERE code = $1",
+                r#"
+                UPDATE targets
+                SET metadata = $2,
+                    updated_at = $3
+                WHERE code = $1
+                "#,
                 &[&code, &Value::Object(metadata.clone()), &Utc::now()],
             )
             .await?;

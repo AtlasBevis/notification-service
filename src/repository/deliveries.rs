@@ -52,14 +52,16 @@ impl DeliveriesRepository {
 
         let row = tx
             .query_one(
-                "UPDATE deliveries
-                 SET status = $2,
-                     attempt_count = attempt_count + 1,
-                     last_error_message = $3,
-                     sent_at = COALESCE($4, sent_at),
-                     updated_at = $5
-                 WHERE id = $1
-                 RETURNING attempt_count",
+                r#"
+                UPDATE deliveries
+                SET status = $2,
+                    attempt_count = attempt_count + 1,
+                    last_error_message = $3,
+                    sent_at = COALESCE($4, sent_at),
+                    updated_at = $5
+                WHERE id = $1
+                RETURNING attempt_count
+                "#,
                 &[
                     &delivery_id,
                     &delivery_status,
@@ -72,9 +74,11 @@ impl DeliveriesRepository {
         let attempt_no: i32 = row.get("attempt_count");
 
         tx.execute(
-            "INSERT INTO delivery_attempts (
+            r#"
+            INSERT INTO delivery_attempts (
                 delivery_id, attempt_no, status, finished_at, error_message
-             ) VALUES ($1,$2,$3,$4,$5)",
+            ) VALUES ($1,$2,$3,$4,$5)
+            "#,
             &[
                 &delivery_id,
                 &attempt_no,

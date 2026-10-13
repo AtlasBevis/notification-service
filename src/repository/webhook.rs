@@ -16,10 +16,12 @@ impl WebhookRepository {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT id, target_id, service_name, domain, path, method, timeout_seconds, max_retries,
-                        headers
-                 FROM webhook_configs
-                 WHERE id = $1",
+                r#"
+                SELECT id, target_id, service_name, domain, path, method, timeout_seconds, max_retries,
+                       headers
+                FROM webhook_configs
+                WHERE id = $1
+                "#,
                 &[&id],
             )
             .await?
@@ -32,11 +34,14 @@ impl WebhookRepository {
         let client = self.pool.get().await?;
         let rows = client
             .query(
-                "SELECT w.id, w.target_id, w.service_name, w.domain, w.path, w.method,
-                    w.timeout_seconds, w.max_retries, w.headers
-             FROM definition_targets dt
-             JOIN webhook_configs w ON w.target_id = dt.target_id
-             WHERE dt.definition_id = $1 ORDER BY dt.id",
+                r#"
+                SELECT w.id, w.target_id, w.service_name, w.domain, w.path, w.method,
+                       w.timeout_seconds, w.max_retries, w.headers
+                FROM definition_targets dt
+                JOIN webhook_configs w ON w.target_id = dt.target_id
+                WHERE dt.definition_id = $1
+                ORDER BY dt.id
+                "#,
                 &[&definition_id],
             )
             .await?;
@@ -56,12 +61,14 @@ impl WebhookRepository {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
-                "SELECT id AS auth_id, auth_mode, header_name, header_value, token_url,
-                        token_method, token_body_format, request_headers, request_body,
-                        timeout_seconds, token_path, expires_in_path,
-                        default_ttl_seconds, header_prefix
-                 FROM webhook_auth_configs
-                 WHERE webhook_config_id = $1",
+                r#"
+                SELECT id AS auth_id, auth_mode, header_name, header_value, token_url,
+                       token_method, token_body_format, request_headers, request_body,
+                       timeout_seconds, token_path, expires_in_path,
+                       default_ttl_seconds, header_prefix
+                FROM webhook_auth_configs
+                WHERE webhook_config_id = $1
+                "#,
                 &[&webhook_config_id],
             )
             .await?
