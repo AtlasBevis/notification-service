@@ -49,19 +49,21 @@ impl CreateSourceRequest {
         self.name = self.name.trim().to_string();
     }
 
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> AppResult<()> {
         if self.code.is_empty() {
-            return Err("code is required".to_string());
+            return Err(AppError::bad_request("code is required"));
         }
         if !self
             .code
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         {
-            return Err("code must be alphanumeric, '_' or '-'".to_string());
+            return Err(AppError::bad_request(
+                "code must be alphanumeric, '_' or '-'",
+            ));
         }
         if self.name.is_empty() {
-            return Err("name is required".to_string());
+            return Err(AppError::bad_request("name is required"));
         }
         Ok(())
     }
@@ -80,12 +82,12 @@ impl PatchMetadataRequest {
         self.code = self.code.trim().to_ascii_uppercase();
     }
 
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> AppResult<()> {
         if self.code.is_empty() {
-            return Err("code is required".into());
+            return Err(AppError::bad_request("code is required"));
         }
         if self.metadata.is_empty() {
-            return Err("metadata must not be empty".into());
+            return Err(AppError::bad_request("metadata must not be empty"));
         }
         Ok(())
     }

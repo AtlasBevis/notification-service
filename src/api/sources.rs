@@ -24,8 +24,8 @@ pub async fn create_source(
     ApiRequest(mut payload): ApiRequest<CreateSourceRequest>,
 ) -> ApiResponse {
     payload.normalize();
-    if let Err(msg) = payload.validate() {
-        return ApiResponse::bad_request(msg);
+    if let Err(err) = payload.validate() {
+        return err.to_response();
     }
 
     match state.sources_service.create(payload).await {
@@ -39,8 +39,8 @@ pub async fn patch_metadata(
     ApiRequest(mut payload): ApiRequest<PatchMetadataRequest>,
 ) -> ApiResponse {
     payload.normalize();
-    if let Err(msg) = payload.validate() {
-        return ApiResponse::bad_request(msg);
+    if let Err(err) = payload.validate() {
+        return err.to_response();
     }
 
     match state.sources_service.patch_metadata(payload).await {

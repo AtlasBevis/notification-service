@@ -1,5 +1,5 @@
 use crate::config::PostgresConfig;
-use anyhow::{Context, Result};
+use crate::error::{AppError, AppResult};
 use deadpool_postgres::{Manager, Pool, PoolConfig, Runtime};
 use tokio_postgres::{Config, NoTls};
 
@@ -9,7 +9,7 @@ pub struct PostgresManager {
 }
 
 impl PostgresManager {
-    pub fn new(config: &PostgresConfig) -> Result<Self> {
+    pub fn new(config: &PostgresConfig) -> AppResult<Self> {
         let mut pg = Config::new();
         pg.host(&config.host);
         pg.port(config.port);
@@ -25,7 +25,7 @@ impl PostgresManager {
             .config(PoolConfig::new(config.max_pool_size.max(1)))
             .runtime(Runtime::Tokio1)
             .build()
-            .context("Failed to build postgres pool")?;
+            .map_err(|e| AppError::internal_with("Failed to build postgres pool", e))?;
 
         Ok(Self { pool })
     }
@@ -35,16 +35,16 @@ impl PostgresManager {
         self.pool.clone()
     }
 
-    pub async fn ping(&self) -> Result<()> {
+    pub async fn ping(&self) -> AppResult<()> {
         let client = self
             .pool
             .get()
             .await
-            .context("Failed to get postgres connection")?;
+            .map_err(|e| AppError::internal_with("Failed to get postgres connection", e))?;
         client
             .simple_query("SELECT 1")
             .await
-            .context("Postgres ping failed")?;
+            .map_err(|e| AppError::internal_with("Postgres ping failed", e))?;
         Ok(())
     }
 }

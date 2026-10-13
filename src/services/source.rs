@@ -10,7 +10,7 @@ use crate::repository::SourceRepository;
 
 #[async_trait]
 pub trait SourceTrait: Send + Sync {
-    async fn load(&self) -> anyhow::Result<()>;
+    async fn load(&self) -> AppResult<()>;
     async fn get(&self, code: &str) -> Option<SourceData>;
     async fn get_by_code(&self, code: &str) -> AppResult<SourceData>;
     async fn get_active_by_code(&self, code: &str) -> AppResult<SourceData>;
@@ -36,7 +36,7 @@ impl SourceService {
 
 #[async_trait]
 impl SourceTrait for SourceService {
-    async fn load(&self) -> anyhow::Result<()> {
+    async fn load(&self) -> AppResult<()> {
         let rows = self.repo.list().await?;
 
         let mut map = HashMap::new();

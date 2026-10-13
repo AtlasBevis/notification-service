@@ -3,7 +3,7 @@ use serde_json::{Map, Value};
 
 use crate::{
     enums::{Channel, Level},
-    models::{ChannelData, DefinitionData, NotifyRequest, Recipients},
+    models::{ChannelData, DefinitionData, NotifyRequest, Recipients, TargetData},
 };
 
 pub const EVENT_TYPE_SEND: &str = "notification.send";
@@ -86,21 +86,21 @@ impl NotifyMessage {
         }
     }
 
-    pub fn with_definition(mut self, definition: &DefinitionData) -> Result<Self, String> {
+    pub fn with_definition(mut self, definition: &DefinitionData) -> Self {
         self.value.definition_id = definition.id;
         self.value.level = definition.level;
         self.value.code = definition.code.clone();
         self.key.code = definition.code.clone();
-        Ok(self)
+        self
     }
 
-    pub fn with_channel(mut self, channel: &ChannelData) -> Result<Self, String> {
+    pub fn with_channel(mut self, channel: &ChannelData) -> Self {
         self.value.channel = channel.code;
         self.value.channel_id = channel.id;
-        Ok(self)
+        self
     }
 
-    pub fn with_targets(mut self, targets: &[crate::models::TargetData]) -> Self {
+    pub fn with_targets(mut self, targets: &[TargetData]) -> Self {
         self.value.target = targets
             .iter()
             .map(|target| target.code.as_str())

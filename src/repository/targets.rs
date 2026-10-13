@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use chrono::Utc;
 use deadpool_postgres::Pool;
 use serde_json::Value;
@@ -8,7 +7,7 @@ use crate::{
     models::{CreateTargetRequest, TargetData},
 };
 
-use crate::error::AppError;
+use crate::error::{AppError, AppResult};
 
 #[derive(Clone)]
 pub struct TargetsRepository {
@@ -20,8 +19,8 @@ impl TargetsRepository {
         Self { pool }
     }
 
-    pub async fn list(&self) -> Result<Vec<TargetData>> {
-        let client = self.pool.get().await.context("postgres pool")?;
+    pub async fn list(&self) -> AppResult<Vec<TargetData>> {
+        let client = self.pool.get().await?;
         let rows = client
             .query(
                 "SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
@@ -30,15 +29,11 @@ impl TargetsRepository {
                  JOIN channels c ON c.id = t.channel_id",
                 &[],
             )
-            .await
-            .context("list targets")?;
-        rows.iter()
-            .map(TargetData::map_row)
-            .collect::<crate::error::AppResult<Vec<_>>>()
-            .map_err(Into::into)
+            .await?;
+        rows.iter().map(TargetData::map_row).collect()
     }
 
-    pub async fn find_by_code(&self, code: &str) -> Result<TargetData, AppError> {
+    pub async fn find_by_code(&self, code: &str) -> AppResult<TargetData> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
@@ -54,7 +49,7 @@ impl TargetsRepository {
         TargetData::map_row(&row)
     }
 
-    pub async fn find_by_id(&self, id: i32) -> Result<TargetData, AppError> {
+    pub async fn find_by_id(&self, id: i32) -> AppResult<TargetData> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
@@ -70,7 +65,7 @@ impl TargetsRepository {
         TargetData::map_row(&row)
     }
 
-    pub async fn insert(&self, req: &CreateTargetRequest) -> Result<TargetData, AppError> {
+    pub async fn insert(&self, req: &CreateTargetRequest) -> AppResult<TargetData> {
         let client = self.pool.get().await?;
 
         let row = client
@@ -101,7 +96,7 @@ impl TargetsRepository {
         &self,
         code: &str,
         metadata: &serde_json::Map<String, Value>,
-    ) -> Result<(), AppError> {
+    ) -> AppResult<()> {
         let client = self.pool.get().await?;
 
         let n = client

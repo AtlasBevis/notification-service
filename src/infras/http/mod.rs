@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{AppError, AppResult};
 use async_trait::async_trait;
 use http::Extensions;
 use reqwest::{Method, Request, Response};
@@ -17,11 +17,11 @@ pub struct HttpClient {
 }
 
 /// Build a process-wide HTTP client with external call logging.
-pub fn build_http_client(timeout_secs: u64) -> Result<HttpClient> {
+pub fn build_http_client(timeout_secs: u64) -> AppResult<HttpClient> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_secs.max(1)))
         .build()
-        .context("Failed to build http client")?;
+        .map_err(|e| AppError::internal_with("Failed to build http client", e))?;
 
     Ok(HttpClient {
         inner: ClientBuilder::new(client).with(ExternalHttpLogging).build(),
@@ -37,7 +37,7 @@ impl HttpClient {
         headers: &HashMap<String, String>,
         body: Option<Vec<u8>>,
         timeout: Duration,
-    ) -> Result<Response> {
+    ) -> AppResult<Response> {
         let mut request = self.inner.request(method.clone(), url).timeout(timeout);
         for (name, value) in headers {
             if !name.trim().is_empty() {
@@ -50,10 +50,10 @@ impl HttpClient {
         request
             .send()
             .await
-            .with_context(|| format!("HTTP {method} {url} failed"))
+            .map_err(|e| send_error(&method, url, e))
     }
 
-    pub async fn get(&self, url: &str, headers: &HashMap<String, String>) -> Result<Response> {
+    pub async fn get(&self, url: &str, headers: &HashMap<String, String>) -> AppResult<Response> {
         self.request(Method::GET, url, headers, None).await
     }
 
@@ -62,7 +62,7 @@ impl HttpClient {
         url: &str,
         headers: &HashMap<String, String>,
         body: Option<Vec<u8>>,
-    ) -> Result<Response> {
+    ) -> AppResult<Response> {
         self.request(Method::POST, url, headers, body).await
     }
 
@@ -71,7 +71,7 @@ impl HttpClient {
         url: &str,
         headers: &HashMap<String, String>,
         body: Option<Vec<u8>>,
-    ) -> Result<Response> {
+    ) -> AppResult<Response> {
         self.request(Method::PUT, url, headers, body).await
     }
 
@@ -80,11 +80,15 @@ impl HttpClient {
         url: &str,
         headers: &HashMap<String, String>,
         body: Option<Vec<u8>>,
-    ) -> Result<Response> {
+    ) -> AppResult<Response> {
         self.request(Method::PATCH, url, headers, body).await
     }
 
-    pub async fn delete(&self, url: &str, headers: &HashMap<String, String>) -> Result<Response> {
+    pub async fn delete(
+        &self,
+        url: &str,
+        headers: &HashMap<String, String>,
+    ) -> AppResult<Response> {
         self.request(Method::DELETE, url, headers, None).await
     }
 
@@ -94,8 +98,9 @@ impl HttpClient {
         url: &str,
         headers: &HashMap<String, String>,
         body: &impl Serialize,
-    ) -> Result<()> {
-        let payload = serde_json::to_vec(body).context("Failed to serialize JSON body")?;
+    ) -> AppResult<()> {
+        let payload = serde_json::to_vec(body)
+            .map_err(|e| AppError::internal_with("Failed to serialize JSON body", e))?;
         let mut headers = headers.clone();
         headers
             .entry("Content-Type".to_string())
@@ -110,8 +115,9 @@ impl HttpClient {
         url: &str,
         headers: &HashMap<String, String>,
         body: &impl Serialize,
-    ) -> Result<()> {
-        let payload = serde_json::to_vec(body).context("Failed to serialize JSON body")?;
+    ) -> AppResult<()> {
+        let payload = serde_json::to_vec(body)
+            .map_err(|e| AppError::internal_with("Failed to serialize JSON body", e))?;
         let mut headers = headers.clone();
         headers
             .entry("Content-Type".to_string())
@@ -126,8 +132,9 @@ impl HttpClient {
         url: &str,
         headers: &HashMap<String, String>,
         body: &impl Serialize,
-    ) -> Result<()> {
-        let payload = serde_json::to_vec(body).context("Failed to serialize JSON body")?;
+    ) -> AppResult<()> {
+        let payload = serde_json::to_vec(body)
+            .map_err(|e| AppError::internal_with("Failed to serialize JSON body", e))?;
         let mut headers = headers.clone();
         headers
             .entry("Content-Type".to_string())
@@ -137,17 +144,20 @@ impl HttpClient {
     }
 
     /// GET and parse JSON response body.
-    pub async fn get_json(&self, url: &str, headers: &HashMap<String, String>) -> Result<Value> {
+    pub async fn get_json(&self, url: &str, headers: &HashMap<String, String>) -> AppResult<Value> {
         let response = self.get(url, headers).await?;
         let status = response.status();
         let text = response
             .text()
             .await
-            .with_context(|| format!("HTTP GET {url} read body failed"))?;
+            .map_err(|e| AppError::internal_with(format!("HTTP GET {url} read body failed"), e))?;
         if !status.is_success() {
-            anyhow::bail!("HTTP {status} from {url}: {text}");
+            return Err(AppError::internal(format!(
+                "HTTP {status} from {url}: {text}"
+            )));
         }
-        serde_json::from_str(&text).with_context(|| format!("HTTP GET {url} invalid JSON"))
+        serde_json::from_str(&text)
+            .map_err(|e| AppError::internal_with(format!("HTTP GET {url} invalid JSON"), e))
     }
 
     async fn request(
@@ -156,7 +166,7 @@ impl HttpClient {
         url: &str,
         headers: &HashMap<String, String>,
         body: Option<Vec<u8>>,
-    ) -> Result<Response> {
+    ) -> AppResult<Response> {
         let mut req = self.inner.request(method.clone(), url);
         for (name, value) in headers {
             if !name.trim().is_empty() {
@@ -166,19 +176,30 @@ impl HttpClient {
         if let Some(bytes) = body {
             req = req.body(bytes);
         }
-        req.send()
-            .await
-            .with_context(|| format!("HTTP {method} {url} failed"))
+        req.send().await.map_err(|e| send_error(&method, url, e))
     }
 }
 
-async fn ensure_success(url: &str, response: Response) -> Result<()> {
+/// Includes the error's sources so callers can tell a timeout from a connection failure.
+fn send_error(method: &Method, url: &str, err: reqwest_middleware::Error) -> AppError {
+    let mut message = format!("HTTP {method} {url} failed: {err}");
+    let mut source = std::error::Error::source(&err);
+    while let Some(cause) = source {
+        message.push_str(&format!(": {cause}"));
+        source = cause.source();
+    }
+    AppError::internal(message)
+}
+
+async fn ensure_success(url: &str, response: Response) -> AppResult<()> {
     let status = response.status();
     if status.is_success() {
         return Ok(());
     }
     let text = response.text().await.unwrap_or_default();
-    anyhow::bail!("HTTP {status} from {url}: {text}")
+    Err(AppError::internal(format!(
+        "HTTP {status} from {url}: {text}"
+    )))
 }
 
 struct ExternalHttpLogging;

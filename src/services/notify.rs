@@ -138,7 +138,7 @@ impl NotifyService {
         delivery_id: i64,
         max_attempts: u32,
         dispatch: F,
-    ) -> Result<(), String>
+    ) -> AppResult<()>
     where
         F: Fn() -> Fut,
         Fut: std::future::Future<Output = AppResult<()>>,
@@ -199,11 +199,11 @@ impl NotifyService {
                         "status" => "failed"
                     )
                     .increment(1);
-                    return Err(err.to_string());
+                    return Err(err);
                 }
             }
         }
-        Err("dispatch failed".into())
+        Err(AppError::internal("dispatch failed"))
     }
 
     async fn max_attempts_for(&self, request: &NotifyValue) -> u32 {
@@ -264,17 +264,15 @@ impl NotifyService {
         let channel_code = channel.code.as_str();
         let is_webhook = channel.code == Channel::WEBHOOK;
 
-        // Every WEBHOOK target sends its own template as the request body.
+        // A WEBHOOK target sends its own template as the request body; a target
+        // without a template sends the request's variables as the body.
         let mut resolved: HashMap<i32, TemplateData> = HashMap::new();
         let mut target_payloads = Vec::new();
         if is_webhook {
             for target in &definition.targets {
-                let template_id = target.template_id.ok_or_else(|| {
-                    AppError::bad_request(format!(
-                        "definition `{}` target `{}` has no template",
-                        definition.code, target.target_id
-                    ))
-                })?;
+                let Some(template_id) = target.template_id else {
+                    continue;
+                };
                 if !resolved.contains_key(&template_id) {
                     let template = self.templates.get_active_by_id(template_id).await?;
                     resolved.insert(template_id, template);
@@ -287,24 +285,34 @@ impl NotifyService {
         }
 
         // Title and body recorded on the delivery come from the first target
-        // that has a template.
+        // that has a template. A WEBHOOK definition without any template
+        // records the definition name and the variables it sends.
         let first_template_id = definition
             .targets
             .iter()
             .find_map(|target| target.template_id);
-        let template_id = first_template_id.ok_or_else(|| {
-            AppError::bad_request(format!("definition `{}` has no template", definition.code))
-        })?;
-        let template = match resolved.remove(&template_id) {
-            Some(template) => template,
-            None => self.templates.get_active_by_id(template_id).await?,
+        let template = match first_template_id {
+            Some(template_id) => {
+                let template = match resolved.remove(&template_id) {
+                    Some(template) => template,
+                    None => self.templates.get_active_by_id(template_id).await?,
+                };
+                if template.is_json() != is_webhook {
+                    return Err(AppError::bad_request(format!(
+                        "template `{}` format `{}` is not valid for channel `{channel_code}`",
+                        template.name, template.format
+                    )));
+                }
+                Some(template)
+            }
+            None if is_webhook => None,
+            None => {
+                return Err(AppError::bad_request(format!(
+                    "definition `{}` has no template",
+                    definition.code
+                )))
+            }
         };
-        if template.is_json() != is_webhook {
-            return Err(AppError::bad_request(format!(
-                "template `{}` format `{}` is not valid for channel `{channel_code}`",
-                template.name, template.format
-            )));
-        }
 
         let mut recipients = crate::models::Recipients::default();
         for target in targets {
@@ -324,15 +332,23 @@ impl NotifyService {
             )));
         }
 
-        let (title, message) = template.merge_template(&request.variables);
+        let (template_name, title, message) = match template {
+            Some(template) => {
+                let (title, message) = template.merge_template(&request.variables);
+                (template.name, title, message)
+            }
+            None => (
+                String::new(),
+                definition.name.clone(),
+                Value::Object(request.variables.clone()).to_string(),
+            ),
+        };
         Ok(NotifyMessage::with_request(request)
             .with_definition(definition)
-            .map_err(AppError::bad_request)?
             .with_channel(channel)
-            .map_err(AppError::bad_request)?
             .with_targets(targets)
             .with_target_payloads(target_payloads)
-            .with_template(template.name)
+            .with_template(template_name)
             .with_recipients(recipients)
             .with_rendered(title, message))
     }
@@ -462,9 +478,9 @@ impl NotifyTrait for NotifyService {
                         tracing::error!(error = %err, code = %value.code, "Kafka publish failed");
                         let _ = self
                             .deliveries
-                            .record_result(value.delivery_id, "FAILED", Some(&err))
+                            .record_result(value.delivery_id, "FAILED", Some(&err.to_string()))
                             .await;
-                        return Err(AppError::internal(err));
+                        return Err(err);
                     }
                 }
             } else {

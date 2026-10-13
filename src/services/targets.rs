@@ -10,7 +10,7 @@ use crate::repository::TargetsRepository;
 
 #[async_trait]
 pub trait TargetTrait: Send + Sync {
-    async fn load(&self) -> anyhow::Result<()>;
+    async fn load(&self) -> AppResult<()>;
     async fn get(&self, code: &str) -> Option<TargetData>;
     async fn get_by_code(&self, code: &str) -> AppResult<TargetData>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData>;
@@ -35,7 +35,7 @@ impl TargetsService {
 
 #[async_trait]
 impl TargetTrait for TargetsService {
-    async fn load(&self) -> anyhow::Result<()> {
+    async fn load(&self) -> AppResult<()> {
         let rows = self.repo.list().await?;
 
         let mut map = HashMap::new();
@@ -64,7 +64,7 @@ impl TargetTrait for TargetsService {
     async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData> {
         let t = self.repo.find_by_id(id).await?;
         self.cache.write().await.insert(t.code.clone(), t.clone());
-        active_target(t, &format!("id `{id}`")).map_err(AppError::bad_request)
+        active_target(t, &format!("id `{id}`"))
     }
 
     async fn create(&self, req: CreateTargetRequest) -> AppResult<()> {
@@ -102,10 +102,12 @@ impl TargetTrait for TargetsService {
     }
 }
 
-fn active_target(t: TargetData, label: &str) -> Result<TargetData, String> {
+fn active_target(t: TargetData, label: &str) -> AppResult<TargetData> {
     if t.status == Status::Active {
         Ok(t)
     } else {
-        Err(format!("target {label} is not ACTIVE"))
+        Err(AppError::bad_request(format!(
+            "target {label} is not ACTIVE"
+        )))
     }
 }

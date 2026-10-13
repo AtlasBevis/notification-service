@@ -6,8 +6,8 @@ pub async fn create_template(
     State(state): State<SharedState>,
     ApiRequest(payload): ApiRequest<CreateTemplateRequest>,
 ) -> ApiResponse<TemplateData> {
-    if let Err(msg) = payload.validate() {
-        return ApiResponse::bad_request(msg);
+    if let Err(err) = payload.validate() {
+        return err.to_response();
     }
 
     match state.templates_service.create(payload).await {

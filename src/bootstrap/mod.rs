@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{AppError, AppResult};
 use std::sync::Arc;
 
 use crate::config::Config;
@@ -15,7 +15,7 @@ use crate::services::{
 use crate::state::{AppState, SharedState};
 
 /// HTTP API: load sources/targets/channels into memory, serve APIs.
-pub async fn build_state(config: &Config) -> Result<SharedState> {
+pub async fn build_state(config: &Config) -> AppResult<SharedState> {
     let infras = Infrastructure::new(config).await?;
     let pool = infras.postgres.pool();
 
@@ -47,15 +47,15 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
     channels_service
         .load()
         .await
-        .context("Failed to load channels")?;
+        .map_err(|e| AppError::internal_with("Failed to load channels", e))?;
     sources_service
         .load()
         .await
-        .context("Failed to load sources")?;
+        .map_err(|e| AppError::internal_with("Failed to load sources", e))?;
     targets_service
         .load()
         .await
-        .context("Failed to load targets")?;
+        .map_err(|e| AppError::internal_with("Failed to load targets", e))?;
 
     let notification_service = Arc::new(NotificationService::new(notifications_repo));
     let delivery_service = Arc::new(DeliveryService::new(deliveries_repo));
@@ -85,12 +85,12 @@ pub async fn build_state(config: &Config) -> Result<SharedState> {
 }
 
 /// Worker process `notification-consumer`.
-pub async fn build_notification_consumer(config: &Config) -> Result<Arc<NotifyService>> {
+pub async fn build_notification_consumer(config: &Config) -> AppResult<Arc<NotifyService>> {
     let infras = Infrastructure::new_require_kafka(config).await?;
     let kafka = infras
         .kafka
         .clone()
-        .context("Kafka is required for notification-consumer")?;
+        .ok_or_else(|| AppError::internal("Kafka is required for notification-consumer"))?;
     let pool = infras.postgres.pool();
 
     let sources_service = Arc::new(SourceService::new(SourceRepository::new(pool.clone())));
@@ -100,15 +100,15 @@ pub async fn build_notification_consumer(config: &Config) -> Result<Arc<NotifySe
     channels_service
         .load()
         .await
-        .context("Failed to load channels")?;
+        .map_err(|e| AppError::internal_with("Failed to load channels", e))?;
     sources_service
         .load()
         .await
-        .context("Failed to load sources")?;
+        .map_err(|e| AppError::internal_with("Failed to load sources", e))?;
     targets_service
         .load()
         .await
-        .context("Failed to load targets")?;
+        .map_err(|e| AppError::internal_with("Failed to load targets", e))?;
 
     let notification_service = Arc::new(NotificationService::new(NotificationsRepository::new(
         pool.clone(),

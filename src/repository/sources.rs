@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use chrono::Utc;
 use deadpool_postgres::Pool;
 use serde_json::Value;
@@ -17,20 +16,16 @@ impl SourceRepository {
         Self { pool }
     }
 
-    pub async fn list(&self) -> Result<Vec<SourceData>> {
-        let client = self.pool.get().await.context("postgres pool")?;
+    pub async fn list(&self) -> AppResult<Vec<SourceData>> {
+        let client = self.pool.get().await?;
         let rows = client
             .query(
                 "SELECT id, code, name, status, metadata, created_at, updated_at
                   FROM sources",
                 &[],
             )
-            .await
-            .context("list sources")?;
-        rows.iter()
-            .map(SourceData::map_row)
-            .collect::<AppResult<Vec<_>>>()
-            .map_err(Into::into)
+            .await?;
+        rows.iter().map(SourceData::map_row).collect()
     }
 
     pub async fn find_by_code(&self, code: &str) -> AppResult<SourceData> {
@@ -65,7 +60,7 @@ impl SourceRepository {
         }
     }
 
-    pub async fn insert(&self, req: &CreateSourceRequest) -> Result<SourceData, AppError> {
+    pub async fn insert(&self, req: &CreateSourceRequest) -> AppResult<SourceData> {
         let client = self.pool.get().await?;
 
         let row = client
@@ -89,7 +84,7 @@ impl SourceRepository {
         &self,
         code: &str,
         metadata: &serde_json::Map<String, Value>,
-    ) -> Result<(), AppError> {
+    ) -> AppResult<()> {
         let client = self.pool.get().await?;
 
         let n = client

@@ -17,8 +17,9 @@ CREATE TABLE definitions (
 );
 
 -- A definition may deliver to multiple destination groups on its channel.
--- template_id is the template rendered for that target. Every WEBHOOK target
--- needs one (a format = 'JSON' template, sent as that target's request body).
+-- template_id is the template rendered for that target. A WEBHOOK target sends
+-- it (a format = 'JSON' template) as its request body; when NULL the target
+-- sends the notify request's variables as the body.
 -- EMAIL / MSTEAMS render one message from the first target that has a template.
 CREATE TABLE definition_targets (
   id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

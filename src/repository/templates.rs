@@ -3,7 +3,7 @@ use deadpool_postgres::Pool;
 
 use crate::models::{CreateTemplateRequest, TemplateData};
 
-use crate::error::AppError;
+use crate::error::{AppError, AppResult};
 
 const COLUMNS: &str = "t.id, t.name, t.status, v.id AS version_id, v.version, v.status AS version_status, v.title, v.content, v.format, t.created_at, t.updated_at";
 
@@ -18,7 +18,7 @@ impl TemplateRepository {
     }
 
     /// Template with its latest ACTIVE version.
-    pub async fn find_by_id(&self, id: i32) -> Result<TemplateData, AppError> {
+    pub async fn find_by_id(&self, id: i32) -> AppResult<TemplateData> {
         let client = self.pool.get().await?;
         let sql = format!(
             "SELECT {COLUMNS}
@@ -36,10 +36,7 @@ impl TemplateRepository {
     }
 
     /// Creates the template on first use of `name`, then appends the next version.
-    pub async fn insert_version(
-        &self,
-        req: &CreateTemplateRequest,
-    ) -> Result<TemplateData, AppError> {
+    pub async fn insert_version(&self, req: &CreateTemplateRequest) -> AppResult<TemplateData> {
         let mut client = self.pool.get().await?;
         let tx = client.transaction().await?;
         let name = req.name.trim().to_string();

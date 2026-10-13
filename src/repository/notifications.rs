@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::models::{AcceptedNotification, DeliveryDraft};
 
-use crate::error::AppError;
+use crate::error::{AppError, AppResult};
 
 #[derive(Clone)]
 pub struct NotificationsRepository {
@@ -26,7 +26,7 @@ impl NotificationsRepository {
         trace_id: &str,
         variables: &Value,
         drafts: &[DeliveryDraft],
-    ) -> Result<AcceptedNotification, AppError> {
+    ) -> AppResult<AcceptedNotification> {
         let mut client = self.pool.get().await?;
         let tx = client.transaction().await?;
         let now = Utc::now();

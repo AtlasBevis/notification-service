@@ -26,7 +26,7 @@ impl TemplateService {
 impl TemplateTrait for TemplateService {
     async fn get_active_by_id(&self, id: i32) -> AppResult<TemplateData> {
         let t = self.repo.find_by_id(id).await?;
-        is_active(t, id).map_err(AppError::bad_request)
+        is_active(t, id)
     }
 
     async fn create(&self, req: CreateTemplateRequest) -> AppResult<TemplateData> {
@@ -52,11 +52,13 @@ impl TemplateTrait for TemplateService {
     }
 }
 
-fn is_active(t: TemplateData, id: i32) -> Result<TemplateData, String> {
+fn is_active(t: TemplateData, id: i32) -> AppResult<TemplateData> {
     if t.status == crate::enums::Status::Active {
         Ok(t)
     } else {
-        Err(format!("template id `{id}` is not ACTIVE"))
+        Err(AppError::bad_request(format!(
+            "template id `{id}` is not ACTIVE"
+        )))
     }
 }
 

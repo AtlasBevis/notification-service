@@ -24,8 +24,8 @@ pub async fn create_target(
     ApiRequest(mut payload): ApiRequest<CreateTargetRequest>,
 ) -> ApiResponse {
     payload.normalize();
-    if let Err(msg) = payload.validate() {
-        return ApiResponse::bad_request(msg);
+    if let Err(err) = payload.validate() {
+        return err.to_response();
     }
 
     match state.targets_service.create(payload).await {
@@ -39,8 +39,8 @@ pub async fn patch_metadata(
     ApiRequest(mut payload): ApiRequest<PatchMetadataRequest>,
 ) -> ApiResponse {
     payload.normalize();
-    if let Err(msg) = payload.validate() {
-        return ApiResponse::bad_request(msg);
+    if let Err(err) = payload.validate() {
+        return err.to_response();
     }
 
     match state.targets_service.patch_metadata(payload).await {

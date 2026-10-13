@@ -1,5 +1,5 @@
 use crate::config::{Config, HttpConfig, PostgresConfig};
-use anyhow::Result;
+use crate::error::{AppError, AppResult};
 use std::sync::Arc;
 
 pub mod http;
@@ -18,7 +18,7 @@ pub struct Infrastructure {
 }
 
 impl Infrastructure {
-    pub async fn new(config: &Config) -> Result<Self> {
+    pub async fn new(config: &Config) -> AppResult<Self> {
         tracing::info!("Initializing infrastructure...");
 
         let http_client = Self::init_http_client(&config.server.http)?;
@@ -32,7 +32,7 @@ impl Infrastructure {
         })
     }
 
-    pub async fn new_require_kafka(config: &Config) -> Result<Self> {
+    pub async fn new_require_kafka(config: &Config) -> AppResult<Self> {
         tracing::info!("Initializing infrastructure (notification-consumer)...");
 
         let http_client = Self::init_http_client(&config.server.http)?;
@@ -46,10 +46,12 @@ impl Infrastructure {
         })
     }
 
-    async fn init_kafka(config: &Config, required: bool) -> Result<Option<Arc<KafkaBus>>> {
+    async fn init_kafka(config: &Config, required: bool) -> AppResult<Option<Arc<KafkaBus>>> {
         if !config.kafka.enabled {
             if required {
-                anyhow::bail!("kafka.enabled must be true for notification-consumer");
+                return Err(AppError::internal(
+                    "kafka.enabled must be true for notification-consumer",
+                ));
             }
             tracing::info!("Kafka is disabled");
             return Ok(None);
@@ -67,12 +69,12 @@ impl Infrastructure {
         }
     }
 
-    fn init_http_client(config: &HttpConfig) -> Result<Arc<HttpClient>> {
+    fn init_http_client(config: &HttpConfig) -> AppResult<Arc<HttpClient>> {
         tracing::info!("Initializing HTTP client...");
         Ok(Arc::new(build_http_client(config.timeout)?))
     }
 
-    async fn init_postgres(config: &PostgresConfig) -> Result<Arc<PostgresManager>> {
+    async fn init_postgres(config: &PostgresConfig) -> AppResult<Arc<PostgresManager>> {
         tracing::info!(
             host = %config.host,
             port = config.port,

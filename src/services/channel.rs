@@ -10,7 +10,7 @@ use crate::repository::ChannelRepository;
 
 #[async_trait]
 pub trait ChannelTrait: Send + Sync {
-    async fn load(&self) -> anyhow::Result<()>;
+    async fn load(&self) -> AppResult<()>;
     async fn get(&self, code: &str) -> Option<ChannelData>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<ChannelData>;
 }
@@ -32,7 +32,7 @@ impl ChannelService {
 
 #[async_trait]
 impl ChannelTrait for ChannelService {
-    async fn load(&self) -> anyhow::Result<()> {
+    async fn load(&self) -> AppResult<()> {
         let rows = self.repo.list().await?;
 
         let mut map = HashMap::new();
@@ -55,14 +55,16 @@ impl ChannelTrait for ChannelService {
             .write()
             .await
             .insert(c.code.as_str().to_string(), c.clone());
-        active_channel(c, &format!("id `{id}`")).map_err(AppError::bad_request)
+        active_channel(c, &format!("id `{id}`"))
     }
 }
 
-fn active_channel(c: ChannelData, label: &str) -> Result<ChannelData, String> {
+fn active_channel(c: ChannelData, label: &str) -> AppResult<ChannelData> {
     if c.status == Status::Active {
         Ok(c)
     } else {
-        Err(format!("channel {label} is not ACTIVE"))
+        Err(AppError::bad_request(format!(
+            "channel {label} is not ACTIVE"
+        )))
     }
 }

@@ -81,7 +81,7 @@ impl WebhookService {
         }
     }
 
-    fn map_send_error(step: &str, err: anyhow::Error) -> AppError {
+    fn map_send_error(step: &str, err: AppError) -> AppError {
         if err.to_string().to_ascii_lowercase().contains("timed out") {
             AppError::internal(format!("{step} request timed out"))
         } else {
@@ -441,17 +441,15 @@ impl WebhookServiceTrait for WebhookService {
         for config in configs {
             let result = async {
                 let auth = self.repo.find_auth_by_webhook_config_id(config.id).await?;
+                // A target without a template sends the request variables as-is.
                 let configured_payload = request
                     .target_payloads
                     .iter()
                     .find(|item| item.target_id == config.target_id)
-                    .map(|item| &item.payload)
-                    .ok_or_else(|| {
-                        AppError::internal(format!(
-                            "missing payload for webhook target `{}`",
-                            config.target_id
-                        ))
-                    })?;
+                    .map(|item| &item.payload);
+                let Some(configured_payload) = configured_payload else {
+                    return self.deliver(&config, &request.variables, &auth).await;
+                };
                 let payload = Self::merge_payload(configured_payload, &request.variables);
                 let payload = payload.as_object().ok_or_else(|| {
                     AppError::bad_request(format!(

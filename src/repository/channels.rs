@@ -1,9 +1,8 @@
-use anyhow::{Context, Result};
 use deadpool_postgres::Pool;
 
 use crate::models::ChannelData;
 
-use crate::error::AppError;
+use crate::error::{AppError, AppResult};
 
 #[derive(Clone)]
 pub struct ChannelRepository {
@@ -15,23 +14,19 @@ impl ChannelRepository {
         Self { pool }
     }
 
-    pub async fn list(&self) -> Result<Vec<ChannelData>> {
-        let client = self.pool.get().await.context("postgres pool")?;
+    pub async fn list(&self) -> AppResult<Vec<ChannelData>> {
+        let client = self.pool.get().await?;
         let rows = client
             .query(
                 "SELECT id, code, name, status, metadata, created_at, updated_at
                  FROM channels",
                 &[],
             )
-            .await
-            .context("list channels")?;
-        rows.iter()
-            .map(ChannelData::map_row)
-            .collect::<crate::error::AppResult<Vec<_>>>()
-            .map_err(Into::into)
+            .await?;
+        rows.iter().map(ChannelData::map_row).collect()
     }
 
-    pub async fn find_by_code(&self, code: &str) -> Result<ChannelData, AppError> {
+    pub async fn find_by_code(&self, code: &str) -> AppResult<ChannelData> {
         let client = self.pool.get().await?;
         let key = code.trim().to_ascii_uppercase();
         let row = client
@@ -45,7 +40,7 @@ impl ChannelRepository {
         ChannelData::map_row(&row)
     }
 
-    pub async fn find_by_id(&self, id: i32) -> Result<ChannelData, AppError> {
+    pub async fn find_by_id(&self, id: i32) -> AppResult<ChannelData> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(

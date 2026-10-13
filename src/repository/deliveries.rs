@@ -1,7 +1,7 @@
 use chrono::Utc;
 use deadpool_postgres::Pool;
 
-use crate::error::AppError;
+use crate::error::{AppError, AppResult};
 
 #[derive(Clone)]
 pub struct DeliveriesRepository {
@@ -19,7 +19,7 @@ impl DeliveriesRepository {
         delivery_id: i64,
         status: &str,
         error_message: Option<&str>,
-    ) -> Result<(), AppError> {
+    ) -> AppResult<()> {
         let attempt_status = if status == "SENT" {
             "SUCCESS"
         } else if error_message.is_some_and(|message| message.contains("timed out")) {
@@ -37,7 +37,7 @@ impl DeliveriesRepository {
         delivery_status: &str,
         attempt_status: &str,
         error_message: Option<&str>,
-    ) -> Result<(), AppError> {
+    ) -> AppResult<()> {
         if delivery_id <= 0 {
             return Ok(());
         }

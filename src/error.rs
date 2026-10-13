@@ -31,6 +31,11 @@ impl AppError {
         Self::Internal(msg.into())
     }
 
+    /// `Internal` error for a failed call: `"{context}: {err}"`.
+    pub fn internal_with(context: impl std::fmt::Display, err: impl std::fmt::Display) -> Self {
+        Self::Internal(format!("{context}: {err}"))
+    }
+
     pub fn to_response<T>(self) -> ApiResponse<T>
     where
         T: Serialize,
@@ -56,6 +61,12 @@ impl std::fmt::Display for AppError {
 }
 
 impl std::error::Error for AppError {}
+
+impl From<std::io::Error> for AppError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Internal(err.to_string())
+    }
+}
 
 impl From<deadpool_postgres::PoolError> for AppError {
     fn from(err: deadpool_postgres::PoolError) -> Self {

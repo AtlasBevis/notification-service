@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{AppError, AppResult};
 use chrono::Utc;
 use futures::StreamExt;
 use rskafka::client::consumer::{StartOffset, StreamConsumer, StreamConsumerBuilder};
@@ -26,9 +26,9 @@ pub struct KafkaBus {
 }
 
 impl KafkaBus {
-    pub async fn connect(config: &KafkaConfig) -> Result<Self> {
+    pub async fn connect(config: &KafkaConfig) -> AppResult<Self> {
         if config.brokers.is_empty() {
-            anyhow::bail!("kafka.brokers is empty");
+            return Err(AppError::internal("kafka.brokers is empty"));
         }
 
         let mut builder =
@@ -43,7 +43,11 @@ impl KafkaBus {
                 "" | "PLAIN" => SaslConfig::Plain(creds),
                 "SCRAM-SHA-256" | "SCRAMSHA256" => SaslConfig::ScramSha256(creds),
                 "SCRAM-SHA-512" | "SCRAMSHA512" => SaslConfig::ScramSha512(creds),
-                other => anyhow::bail!("Unsupported kafka SASL mechanism `{other}`"),
+                other => {
+                    return Err(AppError::internal(format!(
+                        "Unsupported kafka SASL mechanism `{other}`"
+                    )))
+                }
             };
             builder = builder.sasl_config(sasl);
         }
@@ -51,7 +55,7 @@ impl KafkaBus {
         let client = builder
             .build()
             .await
-            .context("Failed to connect to Kafka")?;
+            .map_err(|e| AppError::internal_with("Failed to connect to Kafka", e))?;
 
         Ok(Self {
             client: Arc::new(client),
@@ -60,12 +64,12 @@ impl KafkaBus {
         })
     }
 
-    pub async fn ping(&self) -> Result<()> {
+    pub async fn ping(&self) -> AppResult<()> {
         self.client
             .list_topics()
             .await
             .map(|_| ())
-            .context("Kafka ping failed")
+            .map_err(|e| AppError::internal_with("Kafka ping failed", e))
     }
 
     /// Produce one record; returns `(partition, offset)`.
@@ -75,7 +79,7 @@ impl KafkaBus {
         key: &str,
         headers: BTreeMap<String, Vec<u8>>,
         payload: &[u8],
-    ) -> Result<(i32, i64)> {
+    ) -> AppResult<(i32, i64)> {
         let count = self.partition_count(topic).await?;
         let partition = kafka_partition(key.as_bytes(), count);
         let client = self.partition_client(topic, partition).await?;
@@ -88,14 +92,18 @@ impl KafkaBus {
         let offsets = client
             .produce(vec![record], Compression::default())
             .await
-            .with_context(|| format!("Failed to produce to {topic}[{partition}]"))?;
+            .map_err(|e| {
+                AppError::internal_with(format!("Failed to produce to {topic}[{partition}]"), e)
+            })?;
         let offset = offsets.first().copied().ok_or_else(|| {
-            anyhow::anyhow!("Kafka produce returned no offset for {topic}[{partition}]")
+            AppError::internal(format!(
+                "Kafka produce returned no offset for {topic}[{partition}]"
+            ))
         })?;
         Ok((partition, offset))
     }
 
-    pub async fn partition_ids(&self, topic: &str) -> Result<Vec<i32>> {
+    pub async fn partition_ids(&self, topic: &str) -> AppResult<Vec<i32>> {
         let count = self.partition_count(topic).await?;
         Ok((0..count).collect())
     }
@@ -104,7 +112,7 @@ impl KafkaBus {
         &self,
         topic: &str,
         partition: i32,
-    ) -> Result<Arc<PartitionClient>> {
+    ) -> AppResult<Arc<PartitionClient>> {
         let key = (topic.to_string(), partition);
         {
             let guard = self.partitions.lock().await;
@@ -117,7 +125,9 @@ impl KafkaBus {
             .client
             .partition_client(topic.to_string(), partition, UnknownTopicHandling::Retry)
             .await
-            .with_context(|| format!("Failed to open partition {topic}[{partition}]"))?;
+            .map_err(|e| {
+                AppError::internal_with(format!("Failed to open partition {topic}[{partition}]"), e)
+            })?;
         let client = Arc::new(client);
 
         let mut guard = self.partitions.lock().await;
@@ -135,7 +145,7 @@ impl KafkaBus {
             .build()
     }
 
-    async fn partition_count(&self, topic: &str) -> Result<i32> {
+    async fn partition_count(&self, topic: &str) -> AppResult<i32> {
         {
             let guard = self.topic_partition_count.lock().await;
             if let Some(count) = guard.get(topic) {
@@ -147,7 +157,7 @@ impl KafkaBus {
             .client
             .list_topics()
             .await
-            .context("Failed to list Kafka topics")?;
+            .map_err(|e| AppError::internal_with("Failed to list Kafka topics", e))?;
         let count = topics
             .iter()
             .find(|t| t.name == topic)
@@ -169,8 +179,9 @@ impl KafkaBus {
         kind: &str,
         event_type: &str,
         body: &impl Serialize,
-    ) -> Result<(i32, i64), String> {
-        let payload = serde_json::to_vec(body).map_err(|e| e.to_string())?;
+    ) -> AppResult<(i32, i64)> {
+        let payload = serde_json::to_vec(body)
+            .map_err(|e| AppError::internal_with("Failed to serialize Kafka payload", e))?;
 
         let mut headers = BTreeMap::new();
         headers.insert("source".to_string(), source.as_bytes().to_vec());
@@ -179,10 +190,7 @@ impl KafkaBus {
         headers.insert("type".to_string(), event_type.as_bytes().to_vec());
         headers.insert("content-type".to_string(), b"application/json".to_vec());
 
-        let (partition, offset) = self
-            .publish(topic, key, headers, &payload)
-            .await
-            .map_err(|e| e.to_string())?;
+        let (partition, offset) = self.publish(topic, key, headers, &payload).await?;
 
         metrics::counter!(
             "notification_produced_total",
@@ -207,7 +215,7 @@ impl KafkaBus {
         }
     }
 
-    async fn run_once<H, Fut>(&self, topics: Vec<String>, handler: H) -> Result<()>
+    async fn run_once<H, Fut>(&self, topics: Vec<String>, handler: H) -> AppResult<()>
     where
         H: Fn(String, i32, i64, Option<Vec<u8>>) -> Fut + Clone + Send + Sync + 'static,
         Fut: Future<Output = ()> + Send + 'static,
@@ -222,7 +230,11 @@ impl KafkaBus {
             match result {
                 Ok(Ok(())) => {}
                 Ok(Err(err)) => return Err(err),
-                Err(err) => anyhow::bail!("consumer task join error: {err}"),
+                Err(err) => {
+                    return Err(AppError::internal(format!(
+                        "consumer task join error: {err}"
+                    )))
+                }
             }
         }
         Ok(())
@@ -230,10 +242,10 @@ impl KafkaBus {
 
     async fn spawn_topic<H, Fut>(
         &self,
-        join_set: &mut tokio::task::JoinSet<Result<()>>,
+        join_set: &mut tokio::task::JoinSet<AppResult<()>>,
         topic: String,
         handler: H,
-    ) -> Result<()>
+    ) -> AppResult<()>
     where
         H: Fn(String, i32, i64, Option<Vec<u8>>) -> Fut + Clone + Send + Sync + 'static,
         Fut: Future<Output = ()> + Send + 'static,
@@ -266,7 +278,7 @@ async fn consume_partition<H, Fut>(
     topic: String,
     partition: i32,
     handler: H,
-) -> Result<()>
+) -> AppResult<()>
 where
     H: Fn(String, i32, i64, Option<Vec<u8>>) -> Fut,
     Fut: Future<Output = ()>,
@@ -301,7 +313,9 @@ where
                         break;
                     }
                     None => {
-                        anyhow::bail!("Kafka consumer stream ended for {topic}[{partition}]")
+                        return Err(AppError::internal(format!(
+                            "Kafka consumer stream ended for {topic}[{partition}]"
+                        )))
                     }
                 }
             }

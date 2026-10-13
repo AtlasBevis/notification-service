@@ -86,12 +86,12 @@ impl TemplateData {
     }
 }
 
-fn parse_json_object(content: &str) -> Result<Value, String> {
+fn parse_json_object(content: &str) -> AppResult<Value> {
     match serde_json::from_str::<Value>(content) {
         Ok(value) if value.is_object() => Ok(value),
-        _ => Err(format!(
+        _ => Err(AppError::bad_request(format!(
             "content must be a JSON object for format `{FORMAT_JSON}`"
-        )),
+        ))),
     }
 }
 
@@ -211,15 +211,15 @@ fn default_format() -> String {
 }
 
 impl CreateTemplateRequest {
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> AppResult<()> {
         if self.name.trim().is_empty() {
-            return Err("name is required".to_string());
+            return Err(AppError::bad_request("name is required"));
         }
         if self.title.trim().is_empty() {
-            return Err("title is required".to_string());
+            return Err(AppError::bad_request("title is required"));
         }
         if self.content.trim().is_empty() {
-            return Err("content must not be empty".to_string());
+            return Err(AppError::bad_request("content must not be empty"));
         }
         if self.format.trim().eq_ignore_ascii_case(FORMAT_JSON) {
             parse_json_object(&self.content)?;

@@ -6,7 +6,7 @@ Repository guidance for AI assistants working on this Rust + Axum + Kafka notifi
 
 - The send endpoint is `POST /notification/notify` with `source`, `code`, `trace_id`, and `variables`.
 - `definitions` is configuration provisioned in the database. The service does not expose notification CRUD endpoints.
-- Templates are selected per target by `definition_targets.template_id`; `definitions` has no `template_id`. Every WEBHOOK target must set it (a `format = 'JSON'` template is that target's request body). EMAIL and MSTEAMS render one title/body from the first linked target that has a template.
+- Templates are selected per target by `definition_targets.template_id`; `definitions` has no `template_id`. A WEBHOOK target with a template sends that `format = 'JSON'` template as its request body; without one it sends the request's `variables` unchanged. EMAIL and MSTEAMS require a template and render one title/body from the first linked target that has one.
 - An accepted send internally inserts one row into `notifications` and one row into `deliveries` in a transaction.
 - Delivery channels are `EMAIL`, `MSTEAMS`, and `WEBHOOK`. Kafka dispatches asynchronously when enabled; otherwise the API dispatches directly.
 - Protected API routes use the `api-key` header. `GET /health` is public.

@@ -1,6 +1,6 @@
 use super::{AuthConfig, KafkaConfig, PostgresConfig, ServerConfig};
+use crate::error::{AppError, AppResult};
 use crate::utils::get_env;
-use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fs;
 use std::sync::OnceLock;
@@ -20,18 +20,20 @@ pub struct Config {
 const CONFIG_PATH: &str = "CONFIG_PATH";
 
 impl Config {
-    fn new_from_yaml(content: &str) -> Result<Self> {
-        serde_yaml::from_str(content).context("Failed to parse YAML")
+    fn new_from_yaml(content: &str) -> AppResult<Self> {
+        serde_yaml::from_str(content)
+            .map_err(|e| AppError::internal_with("Failed to parse YAML", e))
     }
 
     /// Resolve profile + config path from env, then load config.
     ///
     /// - `CONFIG_PATH` (default `config.yaml`)
-    pub fn load_from_env() -> Result<Self> {
+    pub fn load_from_env() -> AppResult<Self> {
         let config_path = get_env(CONFIG_PATH).unwrap_or_else(|| "config.yaml".to_string());
 
         tracing::info!("CONFIG_PATH={} => loading config", config_path);
-        let content = fs::read_to_string(&config_path).context("Failed to read config file")?;
+        let content = fs::read_to_string(&config_path)
+            .map_err(|e| AppError::internal_with("Failed to read config file", e))?;
         let mut config = Self::new_from_yaml(&content)?;
         init_profile(config.server.profile.clone());
 
@@ -72,7 +74,7 @@ pub fn profile() -> &'static str {
     PROFILE.get().map(String::as_str).unwrap_or("dev")
 }
 
-pub fn load_config() -> Result<Config> {
+pub fn load_config() -> AppResult<Config> {
     Config::load_from_env()
 }
 

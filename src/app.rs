@@ -1,8 +1,8 @@
 use crate::api::routes;
 use crate::bootstrap;
 use crate::config::load_config;
+use crate::error::{AppError, AppResult};
 use crate::metrics;
-use anyhow::{Context, Result};
 use chrono::{FixedOffset, Utc};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -42,7 +42,7 @@ fn init_tracing() {
         .init();
 }
 
-pub async fn run_api() -> Result<()> {
+pub async fn run_api() -> AppResult<()> {
     init_tracing();
     tracing::info!("Starting Data Notification API...");
 
@@ -58,7 +58,7 @@ pub async fn run_api() -> Result<()> {
         .server
         .http_addr()
         .parse()
-        .map_err(|e| anyhow::anyhow!("Invalid server http addr: {e}"))?;
+        .map_err(|e| AppError::internal_with("Invalid server http addr", e))?;
     tracing::info!("Listening on {}", addr);
 
     let listener = TcpListener::bind(addr).await?;
@@ -68,7 +68,7 @@ pub async fn run_api() -> Result<()> {
 }
 
 /// Kafka worker: `notification-consumer` binary. Dispatch TEAMS / EMAIL.
-pub async fn run_notification_consumer() -> Result<()> {
+pub async fn run_notification_consumer() -> AppResult<()> {
     init_tracing();
     tracing::info!("Starting notification-consumer...");
 
@@ -76,16 +76,16 @@ pub async fn run_notification_consumer() -> Result<()> {
     tracing::info!(version = %config.server.version, "Config loaded");
 
     if !config.kafka.consumer_enabled() {
-        anyhow::bail!(
-            "kafka.enabled and kafka.consumer.enabled must be true for notification-consumer"
-        );
+        return Err(AppError::internal(
+            "kafka.enabled and kafka.consumer.enabled must be true for notification-consumer",
+        ));
     }
 
     metrics::init(&config.server)?;
 
     let service = bootstrap::build_notification_consumer(&config)
         .await
-        .context("Failed to start notification-consumer")?;
+        .map_err(|e| AppError::internal_with("Failed to start notification-consumer", e))?;
     service.run_consumers().await;
-    anyhow::bail!("notification-consumer stopped")
+    Err(AppError::internal("notification-consumer stopped"))
 }
