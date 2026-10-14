@@ -1,4 +1,4 @@
-use chrono::Utc;
+use crate::utils::TimeUtils;
 use deadpool_postgres::Pool;
 
 use crate::error::AppResult;
@@ -43,7 +43,7 @@ impl DeliveriesRepository {
         }
         let mut client = self.pool.get().await?;
         let tx = client.transaction().await?;
-        let now = Utc::now();
+        let now = TimeUtils::now();
         let sent_at = if delivery_status == "SENT" {
             Some(now)
         } else {

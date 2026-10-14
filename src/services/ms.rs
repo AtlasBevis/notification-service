@@ -9,6 +9,7 @@ use crate::infras::http::HttpClient;
 use crate::models::NotifyValue;
 use crate::services::template::wrap_teams_message;
 use crate::services::{ChannelTrait, TargetTrait};
+use crate::utils::JsonUtils;
 
 #[async_trait]
 pub trait MSTrait: Send + Sync {
@@ -46,7 +47,7 @@ impl MSTrait for MSService {
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .ok_or_else(|| AppError::bad_request("rendered Teams card is empty"))?;
-        let card: Value = serde_json::from_str(raw)
+        let card: Value = JsonUtils::str_to_json(raw)
             .map_err(|_| AppError::bad_request("rendered Teams template is not valid JSON"))?;
         let mut failures = Vec::new();
         for target_id in &request.target_ids {

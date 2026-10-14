@@ -8,14 +8,16 @@ use reqwest::{Method, StatusCode, Url};
 use serde_json::Value;
 use tokio::sync::Mutex;
 
+use crate::enums::Channel;
 use crate::enums::Method as ConfiguredMethod;
 use crate::error::{AppError, AppResult};
 use crate::infras::http::HttpClient;
 use crate::models::{
-    DefinitionData, NotifyValue, TokenBodyFormat, WebhookAuthConfig, WebhookAuthMode,
-    WebhookConfig, WebhookPayload,
+    DefinitionData, NotifyValue, SaveWebhookRequest, TokenBodyFormat, WebhookAuthConfig,
+    WebhookAuthMode, WebhookConfig, WebhookData, WebhookPayload,
 };
 use crate::repository::WebhookRepository;
+use crate::services::TargetTrait;
 
 const TOKEN_EXPIRY_SKEW: Duration = Duration::from_secs(30);
 
@@ -30,12 +32,18 @@ pub trait WebhookServiceTrait: Send + Sync {
     ) -> AppResult<WebhookAuthConfig>;
     async fn max_attempts(&self, definition_id: i64) -> AppResult<u32>;
     async fn send_webhook(&self, request: &NotifyValue) -> AppResult<()>;
+    async fn list(&self) -> AppResult<Vec<WebhookData>>;
+    async fn get_by_target_code(&self, target_code: &str) -> AppResult<WebhookData>;
+    async fn create(&self, req: SaveWebhookRequest) -> AppResult<WebhookData>;
+    async fn update(&self, req: SaveWebhookRequest) -> AppResult<WebhookData>;
+    async fn delete(&self, target_code: &str) -> AppResult<()>;
 }
 
 #[derive(Clone)]
 pub struct WebhookService {
     client: Arc<HttpClient>,
     repo: WebhookRepository,
+    targets: Arc<dyn TargetTrait>,
     tokens: Arc<Mutex<HashMap<i32, CachedToken>>>,
 }
 
@@ -46,11 +54,41 @@ struct CachedToken {
 }
 
 impl WebhookService {
-    pub fn new(client: Arc<HttpClient>, repo: WebhookRepository) -> Self {
+    pub fn new(
+        client: Arc<HttpClient>,
+        repo: WebhookRepository,
+        targets: Arc<dyn TargetTrait>,
+    ) -> Self {
         Self {
             client,
             repo,
+            targets,
             tokens: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    /// The id of WEBHOOK target `code`; a missing or non-WEBHOOK target is a bad request.
+    async fn webhook_target_id(&self, code: &str) -> AppResult<i32> {
+        let target = match self.targets.get_by_code(code).await {
+            Ok(target) => target,
+            Err(AppError::NotFound(_)) => {
+                return Err(AppError::bad_request(format!("unknown target `{code}`")))
+            }
+            Err(err) => return Err(err),
+        };
+        if target.channel_code != Channel::WEBHOOK {
+            return Err(AppError::bad_request(format!(
+                "target `{code}` belongs to channel `{}`, not WEBHOOK",
+                target.channel_code
+            )));
+        }
+        Ok(target.id)
+    }
+
+    /// Drops a cached token so the next send fetches one with the new settings.
+    async fn forget_token(&self, data: &WebhookData) {
+        if let Some(auth) = &data.auth {
+            self.tokens.lock().await.remove(&auth.id);
         }
     }
 
@@ -472,5 +510,55 @@ impl WebhookServiceTrait for WebhookService {
                 failures.join("; ")
             )))
         }
+    }
+
+    async fn list(&self) -> AppResult<Vec<WebhookData>> {
+        self.repo.list().await
+    }
+
+    async fn get_by_target_code(&self, target_code: &str) -> AppResult<WebhookData> {
+        self.repo.find_by_target_code(target_code).await
+    }
+
+    async fn create(&self, req: SaveWebhookRequest) -> AppResult<WebhookData> {
+        let target_id = self.webhook_target_id(&req.target_code).await?;
+        match self.repo.insert(target_id, &req).await {
+            Ok(data) => {
+                tracing::info!(id = data.id, target = %data.target_code, "Webhook config created");
+                Ok(data)
+            }
+            Err(AppError::Conflict(_)) => Err(AppError::conflict(format!(
+                "webhook for target `{}` already exists",
+                req.target_code
+            ))),
+            Err(err) => {
+                tracing::error!(error = %err, target = %req.target_code, "create webhook config failed");
+                Err(err)
+            }
+        }
+    }
+
+    async fn update(&self, req: SaveWebhookRequest) -> AppResult<WebhookData> {
+        let target_id = self.webhook_target_id(&req.target_code).await?;
+        match self.repo.update(target_id, &req).await {
+            Ok(data) => {
+                self.forget_token(&data).await;
+                tracing::info!(id = data.id, target = %data.target_code, "Webhook config updated");
+                Ok(data)
+            }
+            Err(err @ AppError::NotFound(_)) => Err(err),
+            Err(err) => {
+                tracing::error!(error = %err, target = %req.target_code, "update webhook config failed");
+                Err(err)
+            }
+        }
+    }
+
+    async fn delete(&self, target_code: &str) -> AppResult<()> {
+        let data = self.repo.find_by_target_code(target_code).await?;
+        self.repo.delete(data.id).await?;
+        self.forget_token(&data).await;
+        tracing::info!(id = data.id, target = %target_code, "Webhook config deleted");
+        Ok(())
     }
 }

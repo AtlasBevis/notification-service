@@ -1,20 +1,24 @@
+use crate::api::{
+    DefinitionController, HealthController, NotifyController, SourceController, TargetController,
+    TemplateController, WebhookController,
+};
 use crate::infras::kafka::KafkaBus;
 use crate::infras::postgres::PostgresManager;
-use crate::services::{
-    ChannelTrait, ConsumerTrait, NotifyTrait, SourceTrait, TargetTrait, TemplateTrait,
-};
+use crate::services::{ChannelTrait, ConsumerTrait, NotifyTrait};
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
-    /// API: validate, record and publish.
     pub notify_service: Arc<dyn NotifyTrait>,
-    /// `notification-job`: consume and dispatch. `None` when Kafka is not connected.
     pub consumer_service: Option<Arc<dyn ConsumerTrait>>,
-    pub sources_service: Arc<dyn SourceTrait>,
-    pub targets_service: Arc<dyn TargetTrait>,
     pub channels_service: Arc<dyn ChannelTrait>,
-    pub templates_service: Arc<dyn TemplateTrait>,
+    pub health_controller: Arc<HealthController>,
+    pub notify_controller: Arc<NotifyController>,
+    pub source_controller: Arc<SourceController>,
+    pub target_controller: Arc<TargetController>,
+    pub template_controller: Arc<TemplateController>,
+    pub definition_controller: Arc<DefinitionController>,
+    pub webhook_controller: Arc<WebhookController>,
     pub postgres: Arc<PostgresManager>,
     pub kafka: Option<Arc<KafkaBus>>,
 }

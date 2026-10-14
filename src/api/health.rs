@@ -1,10 +1,13 @@
+use std::sync::Arc;
+
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde::Serialize;
 
 use crate::config::Config;
+use crate::infras::kafka::KafkaBus;
+use crate::infras::postgres::PostgresManager;
 use crate::models::ApiResponse;
-use crate::state::SharedState;
 
 #[derive(Serialize)]
 pub struct DependencyStatus {
@@ -21,66 +24,77 @@ pub struct HealthResponse {
     pub kafka: DependencyStatus,
 }
 
-pub async fn health(State(state): State<SharedState>) -> ApiResponse<HealthResponse> {
-    let server = &Config::load().server;
-    let kafka_enabled = Config::load().kafka.enabled;
+pub struct HealthController {
+    postgres: Arc<PostgresManager>,
+    kafka: Option<Arc<KafkaBus>>,
+}
 
-    let postgres = match state.postgres.ping().await {
-        Ok(()) => DependencyStatus {
-            status: "ok".to_string(),
-            error: None,
-        },
-        Err(err) => DependencyStatus {
-            status: "error".to_string(),
-            error: Some(err.to_string()),
-        },
-    };
+impl HealthController {
+    pub fn new(postgres: Arc<PostgresManager>, kafka: Option<Arc<KafkaBus>>) -> Self {
+        Self { postgres, kafka }
+    }
 
-    let kafka = if !kafka_enabled {
-        DependencyStatus {
-            status: "disabled".to_string(),
-            error: None,
-        }
-    } else {
-        match &state.kafka {
-            Some(bus) => match bus.ping().await {
-                Ok(()) => DependencyStatus {
-                    status: "ok".to_string(),
-                    error: None,
-                },
-                Err(err) => DependencyStatus {
-                    status: "error".to_string(),
-                    error: Some(err.to_string()),
-                },
+    pub async fn health(State(this): State<Arc<Self>>) -> ApiResponse<HealthResponse> {
+        let server = &Config::load().server;
+        let kafka_enabled = Config::load().kafka.enabled;
+
+        let postgres = match this.postgres.ping().await {
+            Ok(()) => DependencyStatus {
+                status: "ok".to_string(),
+                error: None,
             },
-            None => DependencyStatus {
+            Err(err) => DependencyStatus {
                 status: "error".to_string(),
-                error: Some("Kafka is not connected".to_string()),
+                error: Some(err.to_string()),
             },
-        }
-    };
+        };
 
-    let ok = postgres.status == "ok" && kafka.status != "error";
-    let body = HealthResponse {
-        status: if ok {
-            "ok".to_string()
+        let kafka = if !kafka_enabled {
+            DependencyStatus {
+                status: "disabled".to_string(),
+                error: None,
+            }
         } else {
-            "error".to_string()
-        },
-        profile: server.profile.clone(),
-        version: server.version.clone(),
-        postgres,
-        kafka,
-    };
+            match &this.kafka {
+                Some(bus) => match bus.ping().await {
+                    Ok(()) => DependencyStatus {
+                        status: "ok".to_string(),
+                        error: None,
+                    },
+                    Err(err) => DependencyStatus {
+                        status: "error".to_string(),
+                        error: Some(err.to_string()),
+                    },
+                },
+                None => DependencyStatus {
+                    status: "error".to_string(),
+                    error: Some("Kafka is not connected".to_string()),
+                },
+            }
+        };
 
-    if ok {
-        ApiResponse::success(body)
-    } else {
-        ApiResponse::new(
-            StatusCode::SERVICE_UNAVAILABLE,
-            StatusCode::SERVICE_UNAVAILABLE.as_u16(),
-            "Service Unavailable",
-            Some(body),
-        )
+        let ok = postgres.status == "ok" && kafka.status != "error";
+        let body = HealthResponse {
+            status: if ok {
+                "ok".to_string()
+            } else {
+                "error".to_string()
+            },
+            profile: server.profile.clone(),
+            version: server.version.clone(),
+            postgres,
+            kafka,
+        };
+
+        if ok {
+            ApiResponse::success(body)
+        } else {
+            ApiResponse::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                StatusCode::SERVICE_UNAVAILABLE.as_u16(),
+                "Service Unavailable",
+                Some(body),
+            )
+        }
     }
 }

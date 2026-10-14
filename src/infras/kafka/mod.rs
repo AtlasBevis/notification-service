@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use chrono::Utc;
+use crate::utils::TimeUtils;
 use futures::StreamExt;
 use rskafka::client::consumer::{StartOffset, StreamConsumer, StreamConsumerBuilder};
 use rskafka::client::partition::{Compression, PartitionClient, UnknownTopicHandling};
@@ -98,7 +98,7 @@ impl KafkaBus {
             key: Some(key.as_bytes().to_vec()),
             value: Some(payload.to_vec()),
             headers,
-            timestamp: Utc::now(),
+            timestamp: TimeUtils::now(),
         };
         let offsets = client
             .produce(vec![record], Compression::default())

@@ -1,17 +1,30 @@
-use crate::models::{ApiRequest, ApiResponse, CreateTemplateRequest, TemplateData};
-use crate::state::SharedState;
+use std::sync::Arc;
+
+use crate::models::{ApiRequest, ApiResponse, SaveTemplateRequest, TemplateData};
+use crate::services::TemplateTrait;
 use axum::extract::State;
 
-pub async fn create_template(
-    State(state): State<SharedState>,
-    ApiRequest(payload): ApiRequest<CreateTemplateRequest>,
-) -> ApiResponse<TemplateData> {
-    if let Err(err) = payload.validate() {
-        return err.to_response();
+pub struct TemplateController {
+    svc: Arc<dyn TemplateTrait>,
+}
+
+impl TemplateController {
+    pub fn new(svc: Arc<dyn TemplateTrait>) -> Self {
+        Self { svc: svc }
     }
 
-    match state.templates_service.create(payload).await {
-        Ok(data) => ApiResponse::created(data),
-        Err(err) => err.to_response(),
+    pub async fn save_template(
+        State(this): State<Arc<Self>>,
+        ApiRequest(mut payload): ApiRequest<SaveTemplateRequest>,
+    ) -> ApiResponse<TemplateData> {
+        payload.normalize();
+        if let Err(err) = payload.validate() {
+            return err.to_response();
+        }
+
+        match this.svc.create(payload).await {
+            Ok(data) => ApiResponse::created(data),
+            Err(err) => err.to_response(),
+        }
     }
 }

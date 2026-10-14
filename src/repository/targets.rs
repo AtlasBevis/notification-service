@@ -1,4 +1,4 @@
-use chrono::Utc;
+use crate::utils::TimeUtils;
 use deadpool_postgres::Pool;
 use serde_json::Value;
 
@@ -77,7 +77,7 @@ impl TargetsRepository {
                     &req.name,
                     &Status::Active.as_str(),
                     &Value::Object(req.metadata.clone()),
-                    &Utc::now(),
+                    &TimeUtils::now(),
                 ],
             )
             .await?;
@@ -99,7 +99,7 @@ impl TargetsRepository {
                     updated_at = $3
                 WHERE code = $1
                 "#,
-                &[&code, &Value::Object(metadata.clone()), &Utc::now()],
+                &[&code, &Value::Object(metadata.clone()), &TimeUtils::now()],
             )
             .await?;
 

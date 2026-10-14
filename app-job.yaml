@@ -38,7 +38,7 @@ kafka:
     username: "notification"
     password: ""
   topics:
-    send: "notification.send"
+    notify: "notification.notify"
   consumer:
     enabled: true
     max_wait_ms: 1000

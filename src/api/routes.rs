@@ -1,4 +1,7 @@
-use crate::api::{health, notify, sources, targets, templates};
+use crate::api::{
+    DefinitionController, HealthController, NotifyController, SourceController, TargetController,
+    TemplateController, WebhookController,
+};
 use crate::config::Config;
 use crate::middlewares::{auth_middleware, http_metrics_middleware, logging_middleware};
 use crate::state::SharedState;
@@ -7,53 +10,110 @@ use axum::{
     routing::{get, patch, post},
     Router,
 };
+use std::sync::Arc;
 
 const HEALTH_API: &str = "/health";
 const NOTI_API: &str = "/noti";
 const SOURCES_API: &str = "/sources";
 const TARGETS_API: &str = "/targets";
 const TEMPLATES_API: &str = "/templates";
+const DEFINITIONS_API: &str = "/definitions";
+const WEBHOOKS_API: &str = "/webhooks";
 
 /// `/health` is public at the root; everything else is protected under `server.base_path`.
+/// Handlers are controller methods; each group of routes takes its controller as state.
 pub fn app_routes(state: SharedState) -> Router {
     let base_path = Config::load().server.base_path.as_str();
 
     Router::new()
-        .route(HEALTH_API, get(health::health))
-        .nest(base_path, protected_routes())
-        .with_state(state)
+        .merge(health_routes(state.health_controller.clone()))
+        .nest(base_path, internal_routes(&state))
 }
 
-fn protected_routes() -> Router<SharedState> {
+fn internal_routes(state: &SharedState) -> Router {
     Router::new()
-        .nest(NOTI_API, noti_routes())
-        .nest(SOURCES_API, source_routes())
-        .nest(TARGETS_API, target_routes())
-        .nest(TEMPLATES_API, template_routes())
+        .nest(NOTI_API, noti_routes(state.notify_controller.clone()))
+        .nest(SOURCES_API, source_routes(state.source_controller.clone()))
+        .nest(TARGETS_API, target_routes(state.target_controller.clone()))
+        .nest(
+            TEMPLATES_API,
+            template_routes(state.template_controller.clone()),
+        )
+        .nest(
+            DEFINITIONS_API,
+            definition_routes(state.definition_controller.clone()),
+        )
+        .nest(
+            WEBHOOKS_API,
+            webhook_routes(state.webhook_controller.clone()),
+        )
         .route_layer(middleware::from_fn(auth_middleware))
         .route_layer(middleware::from_fn(logging_middleware))
         .route_layer(middleware::from_fn(http_metrics_middleware))
 }
 
+fn health_routes(controller: Arc<HealthController>) -> Router {
+    Router::new()
+        .route(HEALTH_API, get(HealthController::health))
+        .with_state(controller)
+}
+
 /// Routes that work on the `notifications` table.
-fn noti_routes() -> Router<SharedState> {
-    Router::new().route("/notify", post(notify::notify))
-}
-
-fn source_routes() -> Router<SharedState> {
+fn noti_routes(controller: Arc<NotifyController>) -> Router {
     Router::new()
-        .route("/", post(sources::create_source))
-        .route("/metadata", patch(sources::patch_metadata))
-        .route("/:code", get(sources::get_source))
+        .route("/notify", post(NotifyController::notify))
+        .with_state(controller)
 }
 
-fn target_routes() -> Router<SharedState> {
+fn source_routes(controller: Arc<SourceController>) -> Router {
     Router::new()
-        .route("/", post(targets::create_target))
-        .route("/metadata", patch(targets::patch_metadata))
-        .route("/:code", get(targets::get_target))
+        .route("/", post(SourceController::create_source))
+        .route("/metadata", patch(SourceController::patch_metadata))
+        .route("/:code", get(SourceController::get_source))
+        .with_state(controller)
 }
 
-fn template_routes() -> Router<SharedState> {
-    Router::new().route("/", post(templates::create_template))
+fn target_routes(controller: Arc<TargetController>) -> Router {
+    Router::new()
+        .route("/", post(TargetController::create_target))
+        .route("/metadata", patch(TargetController::patch_metadata))
+        .route("/:code", get(TargetController::get_target))
+        .with_state(controller)
+}
+
+fn definition_routes(controller: Arc<DefinitionController>) -> Router {
+    Router::new()
+        .route(
+            "/",
+            get(DefinitionController::list_definitions)
+                .post(DefinitionController::create_definition),
+        )
+        .route(
+            "/:code",
+            get(DefinitionController::get_definition)
+                .put(DefinitionController::update_definition)
+                .delete(DefinitionController::delete_definition),
+        )
+        .with_state(controller)
+}
+
+fn template_routes(controller: Arc<TemplateController>) -> Router {
+    Router::new()
+        .route("/", post(TemplateController::save_template))
+        .with_state(controller)
+}
+
+fn webhook_routes(controller: Arc<WebhookController>) -> Router {
+    Router::new()
+        .route(
+            "/",
+            get(WebhookController::list_webhooks).post(WebhookController::create_webhook),
+        )
+        .route(
+            "/:code",
+            get(WebhookController::get_webhook)
+                .put(WebhookController::update_webhook)
+                .delete(WebhookController::delete_webhook),
+        )
+        .with_state(controller)
 }

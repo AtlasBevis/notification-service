@@ -15,8 +15,8 @@ CREATE TABLE templates (
   id                INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz,
-
-  name              VARCHAR(255) NOT NULL UNIQUE,
+  code              VARCHAR(255) NOT NULL UNIQUE,
+  name              VARCHAR(255),
   status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE'
 );
 
@@ -25,7 +25,8 @@ CREATE TABLE templates (
 CREATE TABLE template_versions (
   id                INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   created_at        timestamptz NOT NULL DEFAULT now(),
-
+  updated_at        timestamptz,
+  
   template_id       INT          NOT NULL REFERENCES templates (id) ON DELETE CASCADE,
   version           INTEGER      NOT NULL DEFAULT 1,
   status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
@@ -41,9 +42,9 @@ CREATE INDEX idx_template_versions_active ON template_versions (template_id, ver
   WHERE status = 'ACTIVE';
 
 -- data
-INSERT INTO templates (name) VALUES
-  ('airflow'),
-  ('default')
+INSERT INTO templates (code, name) VALUES
+  ('AIRFLOW', 'airflow'),
+  ('DEFAULT', 'default')
 ;
 
 INSERT INTO template_versions (template_id, version, title, content, format)

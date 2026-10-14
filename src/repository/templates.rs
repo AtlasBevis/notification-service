@@ -1,16 +1,8 @@
-use chrono::Utc;
-use deadpool_postgres::Pool;
+use deadpool_postgres::{Object, Pool, Transaction};
 
-use crate::models::{CreateTemplateRequest, TemplateData};
-
+use crate::enums::Status;
 use crate::error::{AppError, AppResult};
-
-const COLUMNS: &str = r#"
-    t.id, t.name, t.status,
-    v.id AS version_id, v.version, v.status AS version_status,
-    v.title, v.content, v.format,
-    t.created_at, t.updated_at
-"#;
+use crate::models::{SaveTemplateRequest, TemplateData};
 
 #[derive(Clone)]
 pub struct TemplateRepository {
@@ -22,53 +14,163 @@ impl TemplateRepository {
         Self { pool }
     }
 
+    /// A pooled connection to open a transaction on; the methods that take
+    /// `tx` run inside that transaction.
+    pub async fn client(&self) -> AppResult<Object> {
+        Ok(self.pool.get().await?)
+    }
+
     /// Template with its latest ACTIVE version.
     pub async fn find_by_id(&self, id: i32) -> AppResult<TemplateData> {
         let client = self.pool.get().await?;
-        let sql = format!(
-            r#"
-            SELECT {COLUMNS}
-            FROM templates t
-            JOIN template_versions v ON v.template_id = t.id
-            WHERE t.id = $1 AND v.status = 'ACTIVE'
-            ORDER BY v.version DESC
-            LIMIT 1
-            "#
-        );
-        let row = client.query_opt(sql.as_str(), &[&id]).await?;
-        let row = row.ok_or_else(|| {
-            AppError::not_found(format!("template id `{id}` has no ACTIVE version"))
-        })?;
+        let row = client
+            .query_opt(
+                r#"
+                SELECT
+                    t.id,
+                    t.code,
+                    t.name,
+                    t.status,
+                    t.created_at,
+                    t.updated_at,
+                    v.id AS version_id,
+                    v.version,
+                    v.status AS version_status,
+                    v.title,
+                    v.content,
+                    v.format
+                FROM templates t
+                JOIN template_versions v
+                    ON v.template_id = t.id
+                WHERE t.id = $1
+                    AND v.status = 'ACTIVE'
+                ORDER BY v.version DESC
+                LIMIT 1
+                "#,
+                &[&id],
+            )
+            .await?
+            .ok_or_else(|| {
+                AppError::not_found(format!("template id `{id}` has no ACTIVE version"))
+            })?;
         TemplateData::map_row(&row)
     }
 
-    /// Creates the template on first use of `name`, then appends the next version.
-    pub async fn insert_version(&self, req: &CreateTemplateRequest) -> AppResult<TemplateData> {
-        let mut client = self.pool.get().await?;
-        let tx = client.transaction().await?;
-        let name = req.name.trim().to_string();
-        let title = req.title.trim().to_string();
-        let content = req.content.clone();
-        let format = req.format.trim().to_ascii_uppercase();
-        let status = req.status.trim().to_ascii_uppercase();
-        let now = Utc::now();
+    /// Template with its latest ACTIVE version.
+    pub async fn find_by_code(&self, code: &str) -> AppResult<TemplateData> {
+        let client = self.pool.get().await?;
+        let row = client
+            .query_opt(
+                r#"
+                SELECT
+                    t.id,
+                    t.code,
+                    t.name,
+                    t.status,
+                    t.created_at,
+                    t.updated_at,
+                    v.id AS version_id,
+                    v.version,
+                    v.status AS version_status,
+                    v.title,
+                    v.content,
+                    v.format
+                FROM templates t
+                JOIN template_versions v
+                    ON v.template_id = t.id
+                WHERE t.code = $1
+                    AND v.status = 'ACTIVE'
+                ORDER BY v.version DESC
+                LIMIT 1
+                "#,
+                &[&code],
+            )
+            .await?
+            .ok_or_else(|| {
+                AppError::not_found(format!("template code `{code}` has no ACTIVE version"))
+            })?;
+        TemplateData::map_row(&row)
+    }
 
-        // The upsert locks the template row, so concurrent creates for one name
-        // take consecutive version numbers.
-        let template = tx
+    /// The template joined with one specific version, whatever its status.
+    pub async fn find_by_version_id(
+        &self,
+        tx: &Transaction<'_>,
+        version_id: i32,
+    ) -> AppResult<TemplateData> {
+        let row = tx
             .query_one(
                 r#"
-                INSERT INTO templates (name, updated_at)
-                VALUES ($1, $2)
-                ON CONFLICT (name) DO UPDATE SET updated_at = EXCLUDED.updated_at
-                RETURNING id
+                SELECT
+                    t.id,
+                    t.code,
+                    t.name,
+                    t.status,
+                    t.created_at,
+                    t.updated_at,
+                    v.id AS version_id,
+                    v.version,
+                    v.status AS version_status,
+                    v.title,
+                    v.content,
+                    v.format
+                FROM templates t
+                JOIN template_versions v
+                    ON v.template_id = t.id
+                WHERE v.id = $1
                 "#,
-                &[&name, &now],
+                &[&version_id],
             )
             .await?;
-        let template_id: i32 = template.get("id");
+        TemplateData::map_row(&row)
+    }
 
-        let version = tx
+    /// Locks the template row of `code`; waits while another transaction holds it.
+    pub async fn lock_by_code(&self, tx: &Transaction<'_>, code: &str) -> AppResult<Option<i32>> {
+        let row = tx
+            .query_opt(
+                r#"
+                SELECT id
+                FROM templates
+                WHERE code = $1
+                FOR UPDATE
+                "#,
+                &[&code],
+            )
+            .await?;
+        Ok(row.map(|r| r.get("id")))
+    }
+
+    /// `None` when another transaction inserted `code` first; the insert waits
+    /// for that transaction to finish before deciding.
+    pub async fn insert_template(
+        &self,
+        tx: &Transaction<'_>,
+        code: &str,
+        name: &str,
+    ) -> AppResult<Option<i32>> {
+        let row = tx
+            .query_opt(
+                r#"
+                INSERT INTO templates (code, name)
+                VALUES ($1, $2)
+                ON CONFLICT (code) DO NOTHING
+                RETURNING id
+                "#,
+                &[&code, &name],
+            )
+            .await?;
+        Ok(row.map(|r| r.get("id")))
+    }
+
+    /// Appends version `max(version) + 1` as ACTIVE and returns its id.
+    pub async fn insert_version(
+        &self,
+        tx: &Transaction<'_>,
+        template_id: i32,
+        req: &SaveTemplateRequest,
+    ) -> AppResult<i32> {
+        let row = tx
             .query_one(
                 r#"
                 INSERT INTO template_versions (template_id, version, status, title, content, format)
@@ -77,22 +179,15 @@ impl TemplateRepository {
                 WHERE template_id = $1
                 RETURNING id
                 "#,
-                &[&template_id, &status, &title, &content, &format],
+                &[
+                    &template_id,
+                    &Status::Active.as_str(),
+                    &req.title,
+                    &req.content,
+                    &req.format.as_str(),
+                ],
             )
             .await?;
-        let version_id: i32 = version.get("id");
-
-        let sql = format!(
-            r#"
-            SELECT {COLUMNS}
-            FROM templates t
-            JOIN template_versions v ON v.template_id = t.id
-            WHERE v.id = $1
-            "#
-        );
-        let row = tx.query_one(sql.as_str(), &[&version_id]).await?;
-        let data = TemplateData::map_row(&row)?;
-        tx.commit().await?;
-        Ok(data)
+        Ok(row.get("id"))
     }
 }

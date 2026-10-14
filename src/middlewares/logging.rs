@@ -10,16 +10,14 @@ use std::time::Instant;
 use tracing::{info_span, Instrument};
 
 use super::RequestContext;
+use crate::utils::StringUtils;
 
 const MAX_LOG_BODY_BYTES: usize = 4096;
 
 fn log_response_body_enabled() -> bool {
-    match std::env::var("LOG_RESPONSE_BODY") {
-        Ok(v) => {
-            let v = v.trim();
-            !(v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off"))
-        }
-        Err(_) => true,
+    match StringUtils::get_env("LOG_RESPONSE_BODY") {
+        Some(v) => !(v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off")),
+        None => true,
     }
 }
 
@@ -63,7 +61,11 @@ pub async fn logging_middleware(request: Request, next: Next) -> Response {
         tracing::info!(
             method = %method,
             path = %path,
-            body = %read_body(&req_bytes),
+            body = %if path.contains("/webhooks") {
+                "<redacted: webhook config may contain secrets>".to_string()
+            } else {
+                read_body(&req_bytes)
+            },
             "==== REQUEST INFO ===="
         );
 

@@ -2,6 +2,8 @@ use chrono::{FixedOffset, Utc};
 use tracing_subscriber::fmt::{format::Writer, time::FormatTime};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use crate::utils::StringUtils;
+
 struct VietnamTime;
 
 impl FormatTime for VietnamTime {
@@ -22,8 +24,8 @@ impl FormatTime for VietnamTime {
 pub fn init_tracing() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| "data_notification=info,tower_http=info".into()),
+            StringUtils::get_env("RUST_LOG")
+                .unwrap_or_else(|| "data_notification=info,tower_http=info".into()),
         ))
         .with(
             tracing_subscriber::fmt::layer()

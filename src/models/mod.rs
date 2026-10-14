@@ -15,13 +15,14 @@ pub mod api_response;
 pub use api_request::ApiRequest;
 pub use api_response::ApiResponse;
 pub use channel::ChannelData;
-pub use definition::DefinitionData;
+pub use definition::{DefinitionData, DefinitionTarget, SaveDefinitionRequest};
 pub use notification::{AcceptedNotification, DeliveryDraft};
 pub use notify_msg::{NotifyKey, NotifyMessage, NotifyValue, TargetPayload, EVENT_TYPE_SEND};
 pub use notify_request::NotifyRequest;
 pub use source::{CreateSourceRequest, PatchMetadataRequest, SourceData};
 pub use target::{CreateTargetRequest, Recipients, TargetData};
-pub use template::{CreateTemplateRequest, TemplateData};
+pub use template::{SaveTemplateRequest, TemplateData};
 pub use webhook::{
-    TokenBodyFormat, WebhookAuthConfig, WebhookAuthMode, WebhookConfig, WebhookPayload,
+    SaveWebhookRequest, TokenBodyFormat, WebhookAuthConfig, WebhookAuthMode, WebhookConfig,
+    WebhookData, WebhookPayload,
 };

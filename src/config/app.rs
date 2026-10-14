@@ -1,6 +1,6 @@
 use super::{AuthConfig, KafkaConfig, PostgresConfig, ServerConfig};
 use crate::error::{AppError, AppResult};
-use crate::utils::get_env;
+use crate::utils::StringUtils;
 use serde::Deserialize;
 use std::fs;
 use std::sync::OnceLock;
@@ -22,7 +22,7 @@ impl Config {
     /// The file is `CONFIG_PATH` when set, otherwise `default_path`
     /// (`app.yaml` for the API, `app-job.yaml` for `notification-job`).
     pub fn new(default_path: &str) -> AppResult<Config> {
-        let path = get_env(CONFIG_PATH).unwrap_or_else(|| default_path.to_string());
+        let path = StringUtils::get_env(CONFIG_PATH).unwrap_or_else(|| default_path.to_string());
         tracing::info!("CONFIG_PATH={} => loading config", path);
 
         let content = fs::read_to_string(&path).map_err(|e| {
@@ -53,13 +53,13 @@ impl Config {
 
     /// Override sensitive fields from env when set (non-empty).
     fn apply_secrets(&mut self) {
-        if let Some(v) = get_env("POSTGRES_PASSWORD") {
+        if let Some(v) = StringUtils::get_env("POSTGRES_PASSWORD") {
             self.postgres.password = v;
         }
-        if let Some(v) = get_env("KAFKA_USERNAME") {
+        if let Some(v) = StringUtils::get_env("KAFKA_USERNAME") {
             self.kafka.sasl.username = v;
         }
-        if let Some(v) = get_env("KAFKA_PASSWORD") {
+        if let Some(v) = StringUtils::get_env("KAFKA_PASSWORD") {
             self.kafka.sasl.password = v;
         }
     }

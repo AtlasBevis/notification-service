@@ -4,7 +4,7 @@ use serde_json::{Map, Value};
 
 use crate::enums::{Channel, Status};
 use crate::error::{AppError, AppResult};
-use crate::utils::json::get_string;
+use crate::utils::JsonUtils;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetData {
@@ -45,7 +45,7 @@ impl TargetData {
 
     /// MSTEAMS webhook URL from `metadata.url` (fallback when channel has no url).
     pub fn teams_webhook_url(&self) -> Option<String> {
-        get_string(&self.metadata, "url")
+        JsonUtils::get_string(&self.metadata, "url")
     }
 }
 

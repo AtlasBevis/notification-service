@@ -1,4 +1,4 @@
-use chrono::Utc;
+use crate::utils::TimeUtils;
 use deadpool_postgres::Pool;
 use serde_json::Value;
 use uuid::Uuid;
@@ -29,7 +29,7 @@ impl NotificationsRepository {
     ) -> AppResult<AcceptedNotification> {
         let mut client = self.pool.get().await?;
         let tx = client.transaction().await?;
-        let now = Utc::now();
+        let now = TimeUtils::now();
         let public_id = Uuid::new_v4().to_string();
 
         let row = tx

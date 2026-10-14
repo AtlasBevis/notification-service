@@ -51,6 +51,10 @@ Mọi route dưới `/notification` cần header `api-key`; `GET /health` là pu
 | `GET` / `POST` | `/notification/targets/{code}`, `/notification/targets` | Xem / tạo target |
 | `PATCH` | `/notification/targets/metadata` | Sửa metadata của target |
 | `POST` | `/notification/templates` | Tạo phiên bản template mới |
+| `GET` / `POST` | `/notification/definitions` | Liệt kê / tạo definition |
+| `GET` / `PUT` / `DELETE` | `/notification/definitions/{code}` | Xem / sửa / xoá definition |
+| `GET` / `POST` | `/notification/webhooks` | Liệt kê / tạo cấu hình webhook cho target WEBHOOK |
+| `GET` / `PUT` / `DELETE` | `/notification/webhooks/{target_code}` | Xem / sửa / xoá cấu hình webhook |
 
 Hệ thống nội bộ có thể gọi gRPC thay cho HTTP: `notification.v1.Notification/Notify` ở cổng `50051`, contract tại [`proto/notification.proto`](proto/notification.proto). Luồng xử lý giống hệt `POST /notification/noti/notify`, `api-key` gửi qua metadata. Chi tiết và ví dụ `grpcurl` ở [`docs/api_flow.md`](docs/api_flow.md).
 
@@ -74,6 +78,7 @@ API lắng nghe HTTP ở `0.0.0.0:8080`, gRPC ở cổng `50051`, metrics Promet
 - Xác thực `api-key`: [`docs/HMAC_AUTH.md`](docs/HMAC_AUTH.md)
 - Thêm API mới và quy ước code: [`docs/how-to-write-new-api.md`](docs/how-to-write-new-api.md)
 - Schema và thứ tự migration: [`migration/FLOW.md`](migration/FLOW.md)
+- Quy tắc code: [`docs/RULES.md`](docs/RULES.md)
 - Hướng dẫn cho AI assistant: [`CLAUDE.md`](CLAUDE.md)
 
 ---

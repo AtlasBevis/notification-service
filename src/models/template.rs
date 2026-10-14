@@ -3,17 +3,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
-use crate::enums::Status;
+use crate::enums::{Status, TemplateFormat};
 use crate::error::{AppError, AppResult};
-
-pub const FORMAT_ADAPTIVE_CARD: &str = "ADAPTIVE_CARD";
-/// Webhook request body; `content` must be a JSON object.
-pub const FORMAT_JSON: &str = "JSON";
+use crate::utils::JsonUtils;
 
 /// A template joined with the version selected for it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateData {
     pub id: i32,
+    pub code: String,
     pub name: String,
     pub status: Status,
     pub version_id: i32,
@@ -21,7 +19,7 @@ pub struct TemplateData {
     pub version_status: Status,
     pub title: String,
     pub content: String,
-    pub format: String,
+    pub format: TemplateFormat,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
@@ -30,45 +28,39 @@ impl TemplateData {
     pub fn map_row(row: &tokio_postgres::Row) -> AppResult<Self> {
         let status: String = row.get("status");
         let version_status: String = row.get("version_status");
+        let format: String = row.get("format");
         Ok(Self {
             id: row.get("id"),
-            name: row.get("name"),
-            status: Status::parse(&status).ok_or_else(|| {
-                AppError::internal(format!("unknown status `{status}` in templates"))
-            })?,
+            code: row.get("code"),
+            name: row.get::<_, Option<String>>("name").unwrap_or_default(),
+            status: Status::parse(&status)
+                .ok_or_else(|| AppError::internal(format!("unknown status `{status}`")))?,
             version_id: row.get("version_id"),
             version: row.get("version"),
-            version_status: Status::parse(&version_status).ok_or_else(|| {
-                AppError::internal(format!(
-                    "unknown status `{version_status}` in template_versions"
-                ))
-            })?,
+            version_status: Status::parse(&version_status)
+                .ok_or_else(|| AppError::internal(format!("unknown status `{version_status}`")))?,
             title: row.get("title"),
             content: row.get("content"),
-            format: row.get("format"),
+            format: TemplateFormat::parse(&format)
+                .ok_or_else(|| AppError::internal(format!("unknow format `{format}`")))?,
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
             updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
         })
     }
 
     pub fn is_json(&self) -> bool {
-        self.format.eq_ignore_ascii_case(FORMAT_JSON)
+        TemplateFormat::Json == self.format
     }
 
     /// Unrendered webhook body of a `JSON` template.
     pub fn json_payload(&self) -> AppResult<Value> {
         if !self.is_json() {
             return Err(AppError::bad_request(format!(
-                "template `{}` format `{}` cannot be used as a webhook body; expected `{FORMAT_JSON}`",
-                self.name, self.format
+                "template `{}` format `{}` is not JSON",
+                self.code, self.format,
             )));
         }
-        parse_json_object(&self.content).map_err(|msg| {
-            AppError::bad_request(format!(
-                "template `{}` version {}: {msg}",
-                self.name, self.version
-            ))
-        })
+        JsonUtils::str_to_json(&self.content)
     }
 
     /// Render templates with
@@ -77,21 +69,12 @@ impl TemplateData {
         let mut vars = HashMap::new();
         flatten_variables(variables, &mut vars);
 
-        let escape_json = self.format.eq_ignore_ascii_case(FORMAT_ADAPTIVE_CARD) || self.is_json();
+        let escape_json = self.format == TemplateFormat::AdaptiveCard || self.is_json();
 
         let title = truncate_chars(&render_placeholders(&self.title, &vars, false), 255);
         vars.insert("title".to_string(), title.clone());
         let content = render_placeholders(&self.content, &vars, escape_json);
         (title, content)
-    }
-}
-
-fn parse_json_object(content: &str) -> AppResult<Value> {
-    match serde_json::from_str::<Value>(content) {
-        Ok(value) if value.is_object() => Ok(value),
-        _ => Err(AppError::bad_request(format!(
-            "content must be a JSON object for format `{FORMAT_JSON}`"
-        ))),
     }
 }
 
@@ -189,40 +172,38 @@ fn truncate_chars(s: &str, max: usize) -> String {
     s.chars().take(max).collect()
 }
 
-/// Insert-only. Same `name` always gets a new `template_versions` row with
-/// `version = max(version)+1`; `status` applies to that version.
 #[derive(Debug, Clone, Deserialize)]
-pub struct CreateTemplateRequest {
+pub struct SaveTemplateRequest {
+    pub code: String,
     pub name: String,
     pub title: String,
     pub content: String,
-    #[serde(default = "default_format")]
-    pub format: String,
-    #[serde(default = "default_active")]
-    pub status: String,
+    pub format: TemplateFormat,
 }
 
-fn default_active() -> String {
-    "ACTIVE".to_string()
-}
+impl SaveTemplateRequest {
+    pub fn normalize(&mut self) {
+        self.code = self.code.trim().to_ascii_uppercase();
+        self.name = self.name.trim().to_string();
+        self.title = self.title.trim().to_string();
+        self.content = self.content.trim().to_string();
+    }
 
-fn default_format() -> String {
-    "TEXT".to_string()
-}
-
-impl CreateTemplateRequest {
     pub fn validate(&self) -> AppResult<()> {
-        if self.name.trim().is_empty() {
+        if self.code.is_empty() {
+            return Err(AppError::bad_request("code is required"));
+        }
+        if self.name.is_empty() {
             return Err(AppError::bad_request("name is required"));
         }
-        if self.title.trim().is_empty() {
+        if self.title.is_empty() {
             return Err(AppError::bad_request("title is required"));
         }
-        if self.content.trim().is_empty() {
+        if self.content.is_empty() {
             return Err(AppError::bad_request("content must not be empty"));
         }
-        if self.format.trim().eq_ignore_ascii_case(FORMAT_JSON) {
-            parse_json_object(&self.content)?;
+        if TemplateFormat::Json == self.format {
+            JsonUtils::is_object(&self.content)?;
         }
         Ok(())
     }

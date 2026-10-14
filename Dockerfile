@@ -1,5 +1,4 @@
-FROM rust:1.92-oracle AS builder
-# Image name still contains "oracle" (company Rust toolchain); the app does not use Oracle DB.
+FROM rust:1.92 AS builder
 
 WORKDIR /app
 
@@ -8,7 +7,8 @@ ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse \
 
 # Layer 1: dependency cache (invalidates only when Cargo.lock changes)
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir -p src/bin && echo "fn main() {}" > src/main.rs && \
+RUN mkdir -p src/bin && \
+    echo "fn main() {}" > src/main.rs && \
     echo "fn main() {}" > src/bin/notification_job.rs && \
     cargo build --release --locked && \
     rm -f target/release/data-notification target/release/notification-job \
@@ -23,7 +23,7 @@ RUN cargo build --release --locked --bin data-notification --bin notification-jo
     install -m 0755 target/release/data-notification /tmp/data-notification && \
     install -m 0755 target/release/notification-job /tmp/notification-job
 
-FROM debian:oracle-slim-v2 AS runtime
+FROM debian:bookworm-slim AS runtime
 
 WORKDIR /app
 

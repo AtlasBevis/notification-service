@@ -1,50 +1,62 @@
+use std::sync::Arc;
+
 use crate::models::{
     ApiRequest, ApiResponse, CreateSourceRequest, PatchMetadataRequest, SourceData,
 };
-use crate::state::SharedState;
+use crate::services::SourceTrait;
 use axum::extract::{Path, State};
 
-pub async fn get_source(
-    State(state): State<SharedState>,
-    Path(code): Path<String>,
-) -> ApiResponse<SourceData> {
-    let key = code.trim().to_ascii_uppercase();
-    if key.is_empty() {
-        return ApiResponse::bad_request("code is required");
-    }
-
-    match state.sources_service.get_by_code(&key).await {
-        Ok(data) => ApiResponse::success(data),
-        Err(err) => err.to_response(),
-    }
+pub struct SourceController {
+    svc: Arc<dyn SourceTrait>,
 }
 
-pub async fn create_source(
-    State(state): State<SharedState>,
-    ApiRequest(mut payload): ApiRequest<CreateSourceRequest>,
-) -> ApiResponse {
-    payload.normalize();
-    if let Err(err) = payload.validate() {
-        return err.to_response();
+impl SourceController {
+    pub fn new(svc: Arc<dyn SourceTrait>) -> Self {
+        Self { svc: svc }
     }
 
-    match state.sources_service.create(payload).await {
-        Ok(()) => ApiResponse::created(()),
-        Err(err) => err.to_response(),
-    }
-}
+    pub async fn get_source(
+        State(this): State<Arc<Self>>,
+        Path(code): Path<String>,
+    ) -> ApiResponse<SourceData> {
+        let key = code.trim().to_ascii_uppercase();
+        if key.is_empty() {
+            return ApiResponse::bad_request("code is required");
+        }
 
-pub async fn patch_metadata(
-    State(state): State<SharedState>,
-    ApiRequest(mut payload): ApiRequest<PatchMetadataRequest>,
-) -> ApiResponse {
-    payload.normalize();
-    if let Err(err) = payload.validate() {
-        return err.to_response();
+        match this.svc.get_by_code(&key).await {
+            Ok(data) => ApiResponse::success(data),
+            Err(err) => err.to_response(),
+        }
     }
 
-    match state.sources_service.patch_metadata(payload).await {
-        Ok(()) => ApiResponse::ok(),
-        Err(err) => err.to_response(),
+    pub async fn create_source(
+        State(this): State<Arc<Self>>,
+        ApiRequest(mut payload): ApiRequest<CreateSourceRequest>,
+    ) -> ApiResponse {
+        payload.normalize();
+        if let Err(err) = payload.validate() {
+            return err.to_response();
+        }
+
+        match this.svc.create(payload).await {
+            Ok(()) => ApiResponse::created(()),
+            Err(err) => err.to_response(),
+        }
+    }
+
+    pub async fn patch_metadata(
+        State(this): State<Arc<Self>>,
+        ApiRequest(mut payload): ApiRequest<PatchMetadataRequest>,
+    ) -> ApiResponse {
+        payload.normalize();
+        if let Err(err) = payload.validate() {
+            return err.to_response();
+        }
+
+        match this.svc.patch_metadata(payload).await {
+            Ok(()) => ApiResponse::ok(),
+            Err(err) => err.to_response(),
+        }
     }
 }

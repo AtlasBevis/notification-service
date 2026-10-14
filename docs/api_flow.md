@@ -18,7 +18,33 @@
 | `deliveries` | Rendered message and delivery status |
 | `delivery_attempts` | Individual dispatch attempts |
 
-The service has no `/notification` CRUD endpoint for `definitions`; definitions are provisioned in the database. Source, target, and template configuration endpoints remain available under `/notification/sources`, `/notification/targets`, and `/notification/templates`.
+Configuration endpoints are available under `/notification/sources`, `/notification/targets`, `/notification/templates`, and `/notification/definitions`.
+
+### Definitions
+
+`POST /notification/definitions` creates a definition and `PUT /notification/definitions/{code}` updates one; both take the same body (the `PUT` takes `code` from the path):
+
+```json
+{
+  "code": "AIRFLOW_TASK_FAILED",
+  "name": "Airflow task failed",
+  "description": "Sent when a DAG task fails",
+  "status": "ACTIVE",
+  "level": "ERROR",
+  "source_code": "AIRFLOW",
+  "channel_code": "EMAIL",
+  "targets": [
+    { "target_code": "DATA_TEAM", "template_id": 1 },
+    { "target_code": "ONCALL" }
+  ]
+}
+```
+
+`status` (`ACTIVE` / `INACTIVE`) and `level` (`INFO` / `WARN` / `ERROR` / `CRITICAL`) are optional: a create defaults them to `ACTIVE` and `INFO`, an update keeps the stored value. `description` is replaced on update, so omitting it clears it. `targets` must not be empty and is stored in the given order; an update replaces the whole list. Both return the stored definition, with targets as `target_id` / `template_id`.
+
+The request is rejected with **400 Bad Request** when the source, channel, a target, or a template is unknown, a target belongs to another channel, a target is listed twice, a template's format does not fit the channel (`JSON` for WEBHOOK only), or an EMAIL / MSTEAMS definition has no template on any target. A duplicate `code` returns **409 Conflict**.
+
+`GET /notification/definitions` lists all definitions ordered by `code`, `GET /notification/definitions/{code}` returns one, and `DELETE /notification/definitions/{code}` removes the definition and its target links. Notifications already accepted for it are kept.
 
 Each definition links to one or more targets through `definition_targets`. The template is selected by `definition_targets.template_id`; `definitions` has no template column. A WEBHOOK target with a `template_id` takes its request body from the latest `ACTIVE` version of that template, which must have `format = 'JSON'` and a JSON object as `content`. A WEBHOOK target without a `template_id` sends the request's `variables` object unchanged as its body. EMAIL and MSTEAMS require a template and render one title and body from the first target (in `definition_targets.id` order) that has one. Placeholders such as `{{date_key}}` are replaced from the request's `variables`; each target gets its own rendered request body. EMAIL merges recipients from selected targets, while MSTEAMS and WEBHOOK send separately to each selected target.
 
@@ -72,7 +98,32 @@ SET headers = '{"service": "MIS"}'::jsonb
 WHERE id = <webhook_config_id>;
 ```
 
-Configure `STATIC` mode for a key supplied directly by the destination:
+### Webhook configs API
+
+`POST /notification/webhooks` creates the `webhook_configs` row and its `webhook_auth_configs` row for a WEBHOOK target; `PUT /notification/webhooks/{target_code}` replaces both. The body is the same for both (`PUT` takes `target_code` from the path):
+
+```json
+{
+  "target_code": "HOOK_DEMO",
+  "domain": "https://partner.example.com",
+  "path": "/api/notify",
+  "method": "POST",
+  "timeout_seconds": 10,
+  "max_retries": 3,
+  "headers": { "service": "MIS" },
+  "auth": {
+    "auth_mode": "STATIC",
+    "header_name": "x-api-key",
+    "header_value": "<secret>"
+  }
+}
+```
+
+`method` is `POST` (default), `PUT`, or `PATCH`; `timeout_seconds` defaults to 10 and `max_retries` to 3. For `TOKEN_ENDPOINT`, `auth` takes `token_url` (required), `token_method`, `token_body_format` (`JSON` / `FORM`), `request_headers`, `request_body`, `token_path`, `expires_in_path`, `default_ttl_seconds`, and `header_prefix`, with the same defaults as the table columns. URLs must be `http`/`https` with a host and no credentials, and header names and values are checked before anything is stored.
+
+The response returns the stored config without secrets: `header_value`, `request_headers`, and `request_body` are never returned, and `auth.has_header_value` shows whether a static value is set. Updating a config drops its cached token. A target that is unknown or not on the WEBHOOK channel returns **400**, a second config for the same target **409**, and an unknown `target_code` on read, update, or delete **404**.
+
+The same settings can also be written directly in SQL. Configure `STATIC` mode for a key supplied directly by the destination:
 
 ```sql
 UPDATE webhook_auth_configs
@@ -135,5 +186,15 @@ Webhook method and timeout come from `webhook_configs`. Each webhook delivery ca
 | `GET` | `/notification/targets/{code}` | Read a target |
 | `PATCH` | `/notification/targets/metadata` | Update target metadata |
 | `POST` | `/notification/templates` | Create a template version (creates the template on first use of `name`) |
+| `GET` | `/notification/definitions` | List definitions |
+| `POST` | `/notification/definitions` | Create a definition |
+| `GET` | `/notification/definitions/{code}` | Read a definition |
+| `PUT` | `/notification/definitions/{code}` | Update a definition and replace its targets |
+| `DELETE` | `/notification/definitions/{code}` | Delete a definition |
+| `GET` | `/notification/webhooks` | List webhook configs |
+| `POST` | `/notification/webhooks` | Create the webhook config and auth config of a WEBHOOK target |
+| `GET` | `/notification/webhooks/{target_code}` | Read a webhook config |
+| `PUT` | `/notification/webhooks/{target_code}` | Replace a webhook config and its auth config |
+| `DELETE` | `/notification/webhooks/{target_code}` | Delete a webhook config and its auth config |
 
 All `/notification` routes require `api-key` authentication. Notification CRUD routes are not provided.

@@ -19,10 +19,10 @@ auth:
   api_key: "3a563319-283a-4f3d-8c3c-954629daa1d4"
 
 postgres:
-  host: "127.0.0.1"
+  host: "localhost"
   port: 5432
   username: "notification"
-  password: ""
+  password: "32131232"
   database: "notification"
   max_pool_size: 10
 
@@ -38,7 +38,7 @@ kafka:
     username: "notification"
     password: "NotifKafka_2026!ChangeMe9"
   topics:
-    send: "notification.send"
+    notify: "notification.notify"
   consumer:
     enabled: false
     max_wait_ms: 1000
