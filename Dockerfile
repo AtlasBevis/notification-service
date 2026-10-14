@@ -29,7 +29,6 @@ WORKDIR /app
 
 COPY --from=builder /tmp/data-notification ./data-notification
 COPY --from=builder /tmp/notification-job ./notification-job
-COPY templates ./templates
 
 EXPOSE 8080 9090 50051
 
