@@ -137,16 +137,39 @@ For `TOKEN_ENDPOINT`, set `auth_mode = 'TOKEN_ENDPOINT'`, provide `token_url`, `
 
 ## gRPC (internal)
 
-`data-notification` also serves `notification.v1.Notification/Notify` for internal callers, on `server.grpc.port` (default config: `50051`) when `server.grpc.enabled` is `true`. The contract is [`proto/notification.proto`](../proto/notification.proto). It runs the same flow as `POST /notification/noti/notify`: same validation, same `(source, trace_id)` idempotency, same publish to Kafka.
+`data-notification` also serves every API route over gRPC for internal callers, on `server.grpc.port` (default config: `50051`) when `server.grpc.enabled` is `true`. The contract is [`proto/notification.proto`](../proto/notification.proto). Each RPC runs the same normalization, validation, and service call as its HTTP route.
+
+| HTTP route | gRPC method |
+|---|---|
+| `POST /noti/notify` | `notification.v1.Notification/Notify` |
+| `GET /sources/{code}` | `notification.v1.Sources/GetSource` |
+| `POST /sources` | `notification.v1.Sources/CreateSource` |
+| `PATCH /sources/metadata` | `notification.v1.Sources/PatchSourceMetadata` |
+| `GET /targets/{code}` | `notification.v1.Targets/GetTarget` |
+| `POST /targets` | `notification.v1.Targets/CreateTarget` |
+| `PATCH /targets/metadata` | `notification.v1.Targets/PatchTargetMetadata` |
+| `POST /templates` | `notification.v1.Templates/SaveTemplate` |
+| `GET /definitions` | `notification.v1.Definitions/ListDefinitions` |
+| `GET /definitions/{code}` | `notification.v1.Definitions/GetDefinition` |
+| `POST /definitions` | `notification.v1.Definitions/CreateDefinition` |
+| `PUT /definitions/{code}` | `notification.v1.Definitions/UpdateDefinition` (`code` in the message) |
+| `DELETE /definitions/{code}` | `notification.v1.Definitions/DeleteDefinition` |
+| `GET /webhooks` | `notification.v1.Webhooks/ListWebhooks` |
+| `GET /webhooks/{target_code}` | `notification.v1.Webhooks/GetWebhook` (`CodeRequest.code` is the target code) |
+| `POST /webhooks` | `notification.v1.Webhooks/CreateWebhook` |
+| `PUT /webhooks/{target_code}` | `notification.v1.Webhooks/UpdateWebhook` (`target_code` in the message) |
+| `DELETE /webhooks/{target_code}` | `notification.v1.Webhooks/DeleteWebhook` |
+
+JSON objects (`variables`, `metadata`, `headers`, `request_headers`, `request_body`) are `google.protobuf.Struct`, timestamps are `google.protobuf.Timestamp`, and enum-like values stay strings. Webhook fields with an HTTP default are `optional` in the proto and take the same default when omitted; send `expires_in_path: ""` to clear it.
 
 | | HTTP | gRPC |
 |---|---|---|
 | Auth | header `api-key` | metadata `api-key` |
 | `variables` | JSON object | `google.protobuf.Struct` |
-| Accepted | `202 Accepted` | `OK`, reply echoes `trace_id` |
+| Success | `200` / `201` / `202` | `OK` (`Notify` echoes `trace_id`; empty replies are `google.protobuf.Empty`) |
 | Bad request / invalid configuration | `400` | `INVALID_ARGUMENT` |
-| Unknown source, code, or target | `404` | `NOT_FOUND` |
-| Repeated `(source, trace_id)` | `409` | `ALREADY_EXISTS` |
+| Unknown source, code, target, or webhook | `404` | `NOT_FOUND` |
+| Conflict, e.g. repeated `(source, trace_id)` | `409` | `ALREADY_EXISTS` |
 | Missing or wrong key | `401` | `UNAUTHENTICATED` |
 | Internal failure (including Kafka not connected) | `500` | `INTERNAL` |
 

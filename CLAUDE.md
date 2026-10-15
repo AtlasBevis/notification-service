@@ -23,6 +23,7 @@ The project builds two binaries:
 - An accepted send inserts one row into `notifications` and one row into `deliveries` in a transaction, then publishes to Kafka.
 - A send fails when Kafka is not connected.
 - Internal callers can use gRPC instead: `notification.v1.Notification/Notify` (`proto/notification.proto`, served from `src/grpc/` on `server.grpc.port`). It runs the same flow and checks the `api-key` metadata entry.
+- Every other HTTP route also has a gRPC method in the same proto (`Sources`, `Targets`, `Templates`, `Definitions`, `Webhooks`); see `docs/api_flow.md` for the mapping.
 - Channels and sources are cached in memory at startup (`bootstrap/load.rs`). Targets are not cached; they are read from Postgres on every use.
 
 ## Definitions and templates
@@ -50,7 +51,7 @@ The project builds two binaries:
 ```text
 src/
   api/          One controller struct per domain (handlers are its methods) and routes.rs
-  grpc/         tonic server: notify.rs (handler), auth.rs (api-key interceptor), mod.rs (generated code + serve)
+  grpc/         tonic server: one struct per service (notify.rs, sources.rs, targets.rs, templates.rs, definitions.rs, webhooks.rs), convert.rs (Struct/Timestamp/Status), auth.rs (api-key interceptor), mod.rs (generated code + serve)
   models/       Request, response, and event data
   services/     Business operations; service-to-service dependencies use traits
   repository/   PostgreSQL adapters
@@ -88,7 +89,7 @@ src/
 - The `/notification` prefix is `server.base_path` in config; `/health` is always at the root.
 - Protected routes use the `api-key` header.
 - There are no create/list/get/update/delete routes for notifications themselves.
-- gRPC: `notification.v1.Notification/Notify` on `server.grpc.port` (metadata `api-key`).
+- gRPC on `server.grpc.port` (metadata `api-key`): `notification.v1.Notification/Notify` plus `Sources`, `Targets`, `Templates`, `Definitions`, `Webhooks`, one method per route above.
 
 ## Configuration
 

@@ -56,7 +56,7 @@ Mọi route dưới `/notification` cần header `api-key`; `GET /health` là pu
 | `GET` / `POST` | `/notification/webhooks` | Liệt kê / tạo cấu hình webhook cho target WEBHOOK |
 | `GET` / `PUT` / `DELETE` | `/notification/webhooks/{target_code}` | Xem / sửa / xoá cấu hình webhook |
 
-Hệ thống nội bộ có thể gọi gRPC thay cho HTTP: `notification.v1.Notification/Notify` ở cổng `50051`, contract tại [`proto/notification.proto`](proto/notification.proto). Luồng xử lý giống hệt `POST /notification/noti/notify`, `api-key` gửi qua metadata. Chi tiết và ví dụ `grpcurl` ở [`docs/api_flow.md`](docs/api_flow.md).
+Hệ thống nội bộ có thể gọi gRPC thay cho HTTP cho toàn bộ API (`notification.v1.Notification/Notify`, `Sources`, `Targets`, `Templates`, `Definitions`, `Webhooks`) ở cổng `50051`, contract tại [`proto/notification.proto`](proto/notification.proto). Mỗi method xử lý giống hệt route HTTP tương ứng, `api-key` gửi qua metadata. Chi tiết và ví dụ `grpcurl` ở [`docs/api_flow.md`](docs/api_flow.md).
 
 ## Chạy local
 

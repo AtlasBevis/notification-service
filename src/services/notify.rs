@@ -261,7 +261,7 @@ impl NotifyTrait for NotifyService {
 
         let topic = Config::load().kafka.topics.notify.clone();
         match kafka
-            .publish_json(
+            .publish(
                 &topic,
                 &msg.key,
                 &msg.value,

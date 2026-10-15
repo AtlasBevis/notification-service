@@ -83,21 +83,26 @@ impl KafkaBus {
             .map_err(|e| AppError::internal_with("Kafka ping failed", e))
     }
 
-    /// Produce one record; returns `(partition, offset)`.
+    /// Publish `key` as the Kafka key and `value` as the Kafka value, both as JSON; returns `(partition, offset)`.
     pub async fn publish(
         &self,
         topic: &str,
-        key: &str,
-        headers: BTreeMap<String, Vec<u8>>,
-        payload: &[u8],
+        key: &impl Serialize,
+        value: &impl Serialize,
+        source: &str,
     ) -> AppResult<(i32, i64)> {
+        let key = serde_json::to_vec(key)
+            .map_err(|e| AppError::internal_with("Failed to serialize Kafka key", e))?;
+        let payload = serde_json::to_vec(value)
+            .map_err(|e| AppError::internal_with("Failed to serialize Kafka value", e))?;
+
         let count = self.partition_count(topic).await?;
-        let partition = kafka_partition(key.as_bytes(), count);
+        let partition = kafka_partition(&key, count);
         let client = self.partition_client(topic, partition).await?;
         let record = Record {
-            key: Some(key.as_bytes().to_vec()),
-            value: Some(payload.to_vec()),
-            headers,
+            key: Some(key),
+            value: Some(payload),
+            headers: BTreeMap::new(),
             timestamp: TimeUtils::now(),
         };
         let offsets = client
@@ -111,6 +116,13 @@ impl KafkaBus {
                 "Kafka produce returned no offset for {topic}[{partition}]"
             ))
         })?;
+
+        metrics::counter!(
+            "notification_produced_total",
+            "topic" => topic.to_owned(),
+            "source" => source.to_owned()
+        )
+        .increment(1);
         Ok((partition, offset))
     }
 
@@ -179,33 +191,6 @@ impl KafkaBus {
         let mut guard = self.topic_partition_count.lock().await;
         guard.insert(topic.to_string(), count);
         Ok(count)
-    }
-
-    /// Publish `key` and `value` as JSON (header `content-type: application/json`); returns `(partition, offset)`.
-    pub async fn publish_json(
-        &self,
-        topic: &str,
-        key: &impl Serialize,
-        value: &impl Serialize,
-        source: &str,
-    ) -> AppResult<(i32, i64)> {
-        let key = serde_json::to_string(key)
-            .map_err(|e| AppError::internal_with("Failed to serialize Kafka key", e))?;
-        let payload = serde_json::to_vec(value)
-            .map_err(|e| AppError::internal_with("Failed to serialize Kafka payload", e))?;
-
-        let mut headers = BTreeMap::new();
-        headers.insert("content-type".to_string(), b"application/json".to_vec());
-
-        let (partition, offset) = self.publish(topic, &key, headers, &payload).await?;
-
-        metrics::counter!(
-            "notification_produced_total",
-            "topic" => topic.to_owned(),
-            "source" => source.to_owned()
-        )
-        .increment(1);
-        Ok((partition, offset))
     }
 
     /// Consume `topics` forever (restart on crash). Calls `handler` per record.

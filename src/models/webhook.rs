@@ -200,11 +200,11 @@ pub struct SaveWebhookRequest {
     pub domain: String,
     #[serde(default)]
     pub path: Option<String>,
-    #[serde(default = "default_method")]
+    #[serde(default = "SaveWebhookRequest::default_method")]
     pub method: String,
-    #[serde(default = "default_timeout_seconds")]
+    #[serde(default = "SaveWebhookRequest::default_timeout_seconds")]
     pub timeout_seconds: i32,
-    #[serde(default = "default_max_retries")]
+    #[serde(default = "SaveWebhookRequest::default_max_retries")]
     pub max_retries: i32,
     #[serde(default)]
     pub headers: Map<String, Value>,
@@ -213,72 +213,75 @@ pub struct SaveWebhookRequest {
 
 #[derive(Clone, Deserialize)]
 pub struct SaveWebhookAuthRequest {
-    #[serde(default = "default_auth_mode")]
+    #[serde(default = "SaveWebhookRequest::default_auth_mode")]
     pub auth_mode: String,
-    #[serde(default = "default_header_name")]
+    #[serde(default = "SaveWebhookRequest::default_header_name")]
     pub header_name: String,
     #[serde(default)]
     pub header_value: Option<String>,
-    #[serde(default = "default_header_prefix")]
+    #[serde(default = "SaveWebhookRequest::default_header_prefix")]
     pub header_prefix: String,
     #[serde(default)]
     pub token_url: Option<String>,
-    #[serde(default = "default_method")]
+    #[serde(default = "SaveWebhookRequest::default_method")]
     pub token_method: String,
-    #[serde(default = "default_token_body_format")]
+    #[serde(default = "SaveWebhookRequest::default_token_body_format")]
     pub token_body_format: String,
     #[serde(default)]
     pub request_headers: Map<String, Value>,
     #[serde(default)]
     pub request_body: Map<String, Value>,
-    #[serde(default = "default_timeout_seconds")]
+    #[serde(default = "SaveWebhookRequest::default_timeout_seconds")]
     pub timeout_seconds: i32,
-    #[serde(default = "default_token_path")]
+    #[serde(default = "SaveWebhookRequest::default_token_path")]
     pub token_path: String,
-    #[serde(default = "default_expires_in_path")]
+    #[serde(default = "SaveWebhookRequest::default_expires_in_path")]
     pub expires_in_path: Option<String>,
-    #[serde(default = "default_ttl_seconds")]
+    #[serde(default = "SaveWebhookRequest::default_ttl_seconds")]
     pub default_ttl_seconds: i32,
 }
 
-fn default_method() -> String {
-    "POST".to_string()
-}
+/// Defaults for omitted body fields, shared by the HTTP body and the gRPC request.
+impl SaveWebhookRequest {
+    pub fn default_method() -> String {
+        "POST".to_string()
+    }
 
-fn default_timeout_seconds() -> i32 {
-    10
-}
+    pub fn default_timeout_seconds() -> i32 {
+        10
+    }
 
-fn default_max_retries() -> i32 {
-    3
-}
+    pub fn default_max_retries() -> i32 {
+        3
+    }
 
-fn default_auth_mode() -> String {
-    "STATIC".to_string()
-}
+    pub fn default_auth_mode() -> String {
+        "STATIC".to_string()
+    }
 
-fn default_header_name() -> String {
-    "x-api-key".to_string()
-}
+    pub fn default_header_name() -> String {
+        "x-api-key".to_string()
+    }
 
-fn default_header_prefix() -> String {
-    "Bearer ".to_string()
-}
+    pub fn default_header_prefix() -> String {
+        "Bearer ".to_string()
+    }
 
-fn default_token_body_format() -> String {
-    "JSON".to_string()
-}
+    pub fn default_token_body_format() -> String {
+        "JSON".to_string()
+    }
 
-fn default_token_path() -> String {
-    "access_token".to_string()
-}
+    pub fn default_token_path() -> String {
+        "access_token".to_string()
+    }
 
-fn default_expires_in_path() -> Option<String> {
-    Some("expires_in".to_string())
-}
+    pub fn default_expires_in_path() -> Option<String> {
+        Some("expires_in".to_string())
+    }
 
-fn default_ttl_seconds() -> i32 {
-    300
+    pub fn default_ttl_seconds() -> i32 {
+        300
+    }
 }
 
 impl SaveWebhookRequest {

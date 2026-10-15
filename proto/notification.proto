@@ -2,16 +2,27 @@ syntax = "proto3";
 
 package notification.v1;
 
+import "google/protobuf/empty.proto";
 import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
 
-// Internal gRPC entry point; same behaviour as `POST /notification/noti/notify`.
+// Internal gRPC API; every service mirrors the HTTP route of the same name
+// under `/notification` and runs the same validation and service calls.
 // Callers send the `api-key` metadata entry.
+//
+// Errors (all RPCs): INVALID_ARGUMENT (bad request or configuration),
+// NOT_FOUND, ALREADY_EXISTS (conflict), UNAUTHENTICATED (missing or wrong
+// `api-key`), INTERNAL.
+//
+// Enum-like values (`status`, `level`, `format`, `channel_code`, `method`,
+// `auth_mode`, ...) are strings, as in the HTTP API.
+
+// ---------------------------------------------------------------------------
+// POST /notification/noti/notify
+// ---------------------------------------------------------------------------
+
 service Notification {
   // Validate, record and publish one notification.
-  //
-  // Errors: INVALID_ARGUMENT (bad request or configuration), NOT_FOUND
-  // (unknown source / code / target), ALREADY_EXISTS (`source` + `trace_id`
-  // already accepted), UNAUTHENTICATED (missing or wrong `api-key`), INTERNAL.
   rpc Notify(NotifyRequest) returns (NotifyReply);
 }
 
@@ -29,4 +40,231 @@ message NotifyRequest {
 message NotifyReply {
   // Echo of the accepted request's `trace_id`.
   string trace_id = 1;
+}
+
+// Request addressed by a single code (path `{code}` / `{target_code}`).
+message CodeRequest {
+  string code = 1;
+}
+
+// Body of `PATCH .../metadata` for sources and targets.
+message PatchMetadataRequest {
+  string code = 1;
+  google.protobuf.Struct metadata = 2;
+}
+
+// ---------------------------------------------------------------------------
+// /notification/sources
+// ---------------------------------------------------------------------------
+
+service Sources {
+  rpc GetSource(CodeRequest) returns (Source);
+  rpc CreateSource(CreateSourceRequest) returns (google.protobuf.Empty);
+  rpc PatchSourceMetadata(PatchMetadataRequest) returns (google.protobuf.Empty);
+}
+
+message Source {
+  int32 id = 1;
+  string code = 2;
+  string name = 3;
+  string status = 4;
+  google.protobuf.Struct metadata = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message CreateSourceRequest {
+  string code = 1;
+  string name = 2;
+  google.protobuf.Struct metadata = 3;
+}
+
+// ---------------------------------------------------------------------------
+// /notification/targets
+// ---------------------------------------------------------------------------
+
+service Targets {
+  rpc GetTarget(CodeRequest) returns (Target);
+  rpc CreateTarget(CreateTargetRequest) returns (google.protobuf.Empty);
+  rpc PatchTargetMetadata(PatchMetadataRequest) returns (google.protobuf.Empty);
+}
+
+message Target {
+  int32 id = 1;
+  string code = 2;
+  string channel_code = 3;
+  string name = 4;
+  string status = 5;
+  google.protobuf.Struct metadata = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message CreateTargetRequest {
+  string code = 1;
+  string channel_code = 2;
+  string name = 3;
+  google.protobuf.Struct metadata = 4;
+}
+
+// ---------------------------------------------------------------------------
+// /notification/templates
+// ---------------------------------------------------------------------------
+
+service Templates {
+  rpc SaveTemplate(SaveTemplateRequest) returns (Template);
+}
+
+message Template {
+  int32 id = 1;
+  string code = 2;
+  string name = 3;
+  string status = 4;
+  int32 version_id = 5;
+  int32 version = 6;
+  string version_status = 7;
+  string title = 8;
+  string content = 9;
+  string format = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message SaveTemplateRequest {
+  string code = 1;
+  string name = 2;
+  string title = 3;
+  string content = 4;
+  // TEXT, HTML, ADAPTIVE_CARD or JSON.
+  string format = 5;
+}
+
+// ---------------------------------------------------------------------------
+// /notification/definitions
+// ---------------------------------------------------------------------------
+
+service Definitions {
+  rpc ListDefinitions(google.protobuf.Empty) returns (DefinitionList);
+  rpc GetDefinition(CodeRequest) returns (Definition);
+  rpc CreateDefinition(SaveDefinitionRequest) returns (Definition);
+  // `code` selects the definition to replace.
+  rpc UpdateDefinition(SaveDefinitionRequest) returns (Definition);
+  rpc DeleteDefinition(CodeRequest) returns (google.protobuf.Empty);
+}
+
+message Definition {
+  int64 id = 1;
+  string code = 2;
+  string name = 3;
+  optional string description = 4;
+  string status = 5;
+  string level = 6;
+  int32 source_id = 7;
+  int32 channel_id = 8;
+  repeated DefinitionTarget targets = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message DefinitionTarget {
+  int32 target_id = 1;
+  optional int32 template_id = 2;
+}
+
+message DefinitionList {
+  repeated Definition items = 1;
+}
+
+message SaveDefinitionRequest {
+  string code = 1;
+  string name = 2;
+  optional string description = 3;
+  // Update keeps the stored value when omitted.
+  optional string status = 4;
+  optional string level = 5;
+  string source_code = 6;
+  string channel_code = 7;
+  // Replaces the linked targets, in this order.
+  repeated DefinitionTargetRequest targets = 8;
+}
+
+message DefinitionTargetRequest {
+  string target_code = 1;
+  optional int32 template_id = 2;
+}
+
+// ---------------------------------------------------------------------------
+// /notification/webhooks (addressed by target code)
+// ---------------------------------------------------------------------------
+
+service Webhooks {
+  rpc ListWebhooks(google.protobuf.Empty) returns (WebhookList);
+  rpc GetWebhook(CodeRequest) returns (Webhook);
+  rpc CreateWebhook(SaveWebhookRequest) returns (Webhook);
+  // `target_code` selects the webhook to replace.
+  rpc UpdateWebhook(SaveWebhookRequest) returns (Webhook);
+  rpc DeleteWebhook(CodeRequest) returns (google.protobuf.Empty);
+}
+
+// Never carries `header_value` or the token request headers and body.
+message Webhook {
+  int32 id = 1;
+  int32 target_id = 2;
+  string target_code = 3;
+  string domain = 4;
+  optional string path = 5;
+  string method = 6;
+  int32 timeout_seconds = 7;
+  int32 max_retries = 8;
+  google.protobuf.Struct headers = 9;
+  WebhookAuth auth = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message WebhookAuth {
+  int32 id = 1;
+  string auth_mode = 2;
+  string header_name = 3;
+  bool has_header_value = 4;
+  string header_prefix = 5;
+  optional string token_url = 6;
+  string token_method = 7;
+  string token_body_format = 8;
+  string token_path = 9;
+  optional string expires_in_path = 10;
+  int32 timeout_seconds = 11;
+  int32 default_ttl_seconds = 12;
+}
+
+message WebhookList {
+  repeated Webhook items = 1;
+}
+
+// Omitted optional fields take the same defaults as the HTTP body.
+message SaveWebhookRequest {
+  string target_code = 1;
+  string domain = 2;
+  optional string path = 3;
+  optional string method = 4;
+  optional int32 timeout_seconds = 5;
+  optional int32 max_retries = 6;
+  google.protobuf.Struct headers = 7;
+  SaveWebhookAuthRequest auth = 8;
+}
+
+message SaveWebhookAuthRequest {
+  optional string auth_mode = 1;
+  optional string header_name = 2;
+  optional string header_value = 3;
+  optional string header_prefix = 4;
+  optional string token_url = 5;
+  optional string token_method = 6;
+  optional string token_body_format = 7;
+  google.protobuf.Struct request_headers = 8;
+  google.protobuf.Struct request_body = 9;
+  optional int32 timeout_seconds = 10;
+  optional string token_path = 11;
+  optional string expires_in_path = 12;
+  optional int32 default_ttl_seconds = 13;
 }

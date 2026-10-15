@@ -24,7 +24,7 @@ Coding rules for this repository. `CLAUDE.md` imports this file; what the servic
 - Re-export the controller from `src/api/mod.rs`, build it in `bootstrap/build.rs`, and store it in `AppState` as `Arc<XxxController>`.
 - Register routes in `src/api/routes.rs` with one function per controller that ends in `.with_state(controller)`, nested in `protected_routes()` unless the endpoint must be public like `/health`.
 - The service uses axum 0.7: write path captures as `/:code`, not `/{code}`.
-- Keep the HTTP notify handler and the gRPC handler in `src/grpc/` in step when the send flow changes.
+- Every route has a gRPC method in `src/grpc/` (one struct per service, built in `bootstrap/build.rs` and stored in `AppState`). Keep the HTTP handler and its gRPC method in step, and add a gRPC method when you add a route.
 
 ## Shared state and `Arc`
 

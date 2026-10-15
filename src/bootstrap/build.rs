@@ -6,6 +6,7 @@ use crate::error::AppResult;
 use std::sync::Arc;
 
 use crate::config::Config;
+use crate::grpc::{DefinitionGrpc, NotifyGrpc, SourceGrpc, TargetGrpc, TemplateGrpc, WebhookGrpc};
 use crate::infras::Infrastructure;
 use crate::repository::{
     ChannelRepository, DefinitionRepository, DeliveriesRepository, NotificationsRepository,
@@ -90,10 +91,18 @@ pub async fn build_state(config: &Config) -> AppResult<SharedState> {
         infras.kafka.clone(),
     ));
     let notify_controller = Arc::new(NotifyController::new(notify_service.clone()));
-    let source_controller = Arc::new(SourceController::new(sources_service));
-    let target_controller = Arc::new(TargetController::new(targets_service));
-    let template_controller = Arc::new(TemplateController::new(templates_service));
-    let definition_controller = Arc::new(DefinitionController::new(definitions_service));
+    let source_controller = Arc::new(SourceController::new(sources_service.clone()));
+    let target_controller = Arc::new(TargetController::new(targets_service.clone()));
+    let template_controller = Arc::new(TemplateController::new(templates_service.clone()));
+    let definition_controller = Arc::new(DefinitionController::new(definitions_service.clone()));
+
+    // gRPC services
+    let notify_grpc = Arc::new(NotifyGrpc::new(notify_service.clone()));
+    let source_grpc = Arc::new(SourceGrpc::new(sources_service));
+    let target_grpc = Arc::new(TargetGrpc::new(targets_service));
+    let template_grpc = Arc::new(TemplateGrpc::new(templates_service));
+    let definition_grpc = Arc::new(DefinitionGrpc::new(definitions_service));
+    let webhook_grpc = Arc::new(WebhookGrpc::new(webhook_service));
 
     Ok(Arc::new(AppState {
         notify_service,
@@ -106,6 +115,12 @@ pub async fn build_state(config: &Config) -> AppResult<SharedState> {
         template_controller,
         definition_controller,
         webhook_controller,
+        notify_grpc,
+        source_grpc,
+        target_grpc,
+        template_grpc,
+        definition_grpc,
+        webhook_grpc,
         postgres: infras.postgres,
         kafka: infras.kafka,
     }))
