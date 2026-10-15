@@ -17,7 +17,7 @@ pub use api_response::ApiResponse;
 pub use channel::ChannelData;
 pub use definition::{DefinitionData, DefinitionTarget, SaveDefinitionRequest};
 pub use notification::{AcceptedNotification, DeliveryDraft};
-pub use notify_msg::{NotifyKey, NotifyMessage, NotifyValue, TargetPayload, EVENT_TYPE_SEND};
+pub use notify_msg::{NotifyKey, NotifyMessage, NotifyValue, TargetPayload};
 pub use notify_request::NotifyRequest;
 pub use source::{CreateSourceRequest, PatchMetadataRequest, SourceData};
 pub use target::{CreateTargetRequest, Recipients, TargetData};

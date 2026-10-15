@@ -16,7 +16,7 @@ use tracing::Instrument;
 
 use crate::config::{Config, KafkaConfig, KafkaSecurityProtocol};
 
-/// Kafka produce/consume helper (rskafka, partition-aware, key = correlation_id).
+/// Kafka produce/consume helper (rskafka, partition-aware, JSON record key).
 #[derive(Clone)]
 pub struct KafkaBus {
     client: Arc<Client>,
@@ -181,27 +181,23 @@ impl KafkaBus {
         Ok(count)
     }
 
-    /// Publish JSON with Kafka message key = `key` (correlation_id); returns `(partition, offset)`.
+    /// Publish `key` and `value` as JSON (header `content-type: application/json`); returns `(partition, offset)`.
     pub async fn publish_json(
         &self,
         topic: &str,
-        key: &str,
+        key: &impl Serialize,
+        value: &impl Serialize,
         source: &str,
-        kind: &str,
-        event_type: &str,
-        body: &impl Serialize,
     ) -> AppResult<(i32, i64)> {
-        let payload = serde_json::to_vec(body)
+        let key = serde_json::to_string(key)
+            .map_err(|e| AppError::internal_with("Failed to serialize Kafka key", e))?;
+        let payload = serde_json::to_vec(value)
             .map_err(|e| AppError::internal_with("Failed to serialize Kafka payload", e))?;
 
         let mut headers = BTreeMap::new();
-        headers.insert("source".to_string(), source.as_bytes().to_vec());
-        headers.insert("correlation_id".to_string(), key.as_bytes().to_vec());
-        headers.insert("kind".to_string(), kind.as_bytes().to_vec());
-        headers.insert("type".to_string(), event_type.as_bytes().to_vec());
         headers.insert("content-type".to_string(), b"application/json".to_vec());
 
-        let (partition, offset) = self.publish(topic, key, headers, &payload).await?;
+        let (partition, offset) = self.publish(topic, &key, headers, &payload).await?;
 
         metrics::counter!(
             "notification_produced_total",

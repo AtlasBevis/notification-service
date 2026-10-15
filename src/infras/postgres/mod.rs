@@ -36,15 +36,13 @@ impl PostgresManager {
     }
 
     pub async fn ping(&self) -> AppResult<()> {
-        let client = self
-            .pool
-            .get()
-            .await
-            .map_err(|e| AppError::internal_with("Failed to get postgres connection", e))?;
+        let client = self.pool.get().await.map_err(|e| {
+            AppError::internal_with("Failed to get postgres connection", AppError::from(e))
+        })?;
         client
             .simple_query("SELECT 1")
             .await
-            .map_err(|e| AppError::internal_with("Postgres ping failed", e))?;
+            .map_err(|e| AppError::internal_with("Postgres ping failed", AppError::from(e)))?;
         Ok(())
     }
 }

@@ -70,7 +70,10 @@ impl From<std::io::Error> for AppError {
 
 impl From<deadpool_postgres::PoolError> for AppError {
     fn from(err: deadpool_postgres::PoolError) -> Self {
-        Self::Internal(err.to_string())
+        match err {
+            deadpool_postgres::PoolError::Backend(e) => Self::from(e),
+            other => Self::Internal(other.to_string()),
+        }
     }
 }
 
@@ -83,6 +86,13 @@ impl From<tokio_postgres::Error> for AppError {
             if db.code() == &SqlState::FOREIGN_KEY_VIOLATION {
                 return Self::Conflict(db.message().to_string());
             }
+            // `tokio_postgres` displays server errors as just `db error`; keep the server's code and message.
+            return Self::Internal(format!(
+                "{} ({}): {}",
+                db.severity(),
+                db.code().code(),
+                db.message()
+            ));
         }
         Self::Internal(err.to_string())
     }

@@ -6,8 +6,6 @@ use crate::{
     models::{ChannelData, DefinitionData, NotifyRequest, Recipients, TargetData},
 };
 
-pub const EVENT_TYPE_SEND: &str = "notification.send";
-
 /// Kafka payload. `Serialize` + `Deserialize` for JSON.
 /// `Debug` for tracing. No `Clone`: pass `&NotifyMessage` or move it.
 #[derive(Debug, Serialize, Deserialize)]

@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::enums::Channel;
 use crate::error::{AppError, AppResult};
 use crate::infras::kafka::KafkaBus;
-use crate::models::{NotifyMessage, NotifyValue};
+use crate::models::NotifyValue;
 use crate::services::{DeliveryTrait, EmailTrait, MSTrait, WebhookServiceTrait};
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -55,18 +55,18 @@ impl ConsumerService {
             return;
         };
 
-        let msg = match serde_json::from_slice::<NotifyMessage>(bytes) {
-            Ok(msg) => msg,
+        let value = match serde_json::from_slice::<NotifyValue>(bytes) {
+            Ok(value) => value,
             Err(err) => {
                 tracing::error!(%topic, partition, offset, error = %err, "Invalid notify JSON; skipping");
                 return;
             }
         };
-        let delivery_id = msg.value.delivery_id;
-        let max_attempts = self.max_attempts_for(&msg.value).await;
+        let delivery_id = value.delivery_id;
+        let max_attempts = self.max_attempts_for(&value).await;
         match self
             .retry_dispatch(topic, delivery_id, max_attempts, || {
-                self.dispatch_send(&msg.value)
+                self.dispatch_send(&value)
             })
             .await
         {
@@ -201,7 +201,7 @@ impl ConsumerService {
 #[async_trait]
 impl ConsumerTrait for ConsumerService {
     async fn consume(self: Arc<Self>) {
-        let topics = vec![Config::load().kafka.topics.send.clone()];
+        let topics = vec![Config::load().kafka.topics.notify.clone()];
         let svc = self.clone();
 
         self.kafka

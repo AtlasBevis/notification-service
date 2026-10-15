@@ -4,7 +4,7 @@ use crate::error::{AppError, AppResult};
 use crate::infras::kafka::KafkaBus;
 use crate::models::{
     DefinitionData, DeliveryDraft, NotifyMessage, NotifyRequest, TargetData, TargetPayload,
-    TemplateData, EVENT_TYPE_SEND,
+    TemplateData,
 };
 use crate::services::{
     ChannelTrait, DefinitionTrait, DeliveryTrait, NotificationTrait, SourceTrait, TargetTrait,
@@ -257,17 +257,15 @@ impl NotifyTrait for NotifyService {
 
         msg.value.notification_id = accepted.id;
         msg.value.delivery_id = accepted.delivery_id;
+        msg.key.notification_id = accepted.id;
 
-        let topic = Config::load().kafka.topics.send.clone();
-        let value = &msg.value;
+        let topic = Config::load().kafka.topics.notify.clone();
         match kafka
             .publish_json(
                 &topic,
-                &value.trace_id,
-                &value.source,
-                value.level.as_str(),
-                EVENT_TYPE_SEND,
-                &msg,
+                &msg.key,
+                &msg.value,
+                &msg.value.source,
             )
             .await
         {
@@ -276,18 +274,18 @@ impl NotifyTrait for NotifyService {
                     topic,
                     partition,
                     offset,
-                    trace_id = %value.trace_id,
-                    code = %value.code,
-                    delivery_id = value.delivery_id,
+                    trace_id = %msg.value.trace_id,
+                    code = %msg.value.code,
+                    delivery_id = msg.value.delivery_id,
                     "Notification published"
                 );
                 Ok(())
             }
             Err(err) => {
-                tracing::error!(error = %err, code = %value.code, "Kafka publish failed");
+                tracing::error!(error = %err, code = %msg.value.code, "Kafka publish failed");
                 let _ = self
                     .deliveries
-                    .record_result(value.delivery_id, "FAILED", Some(&err.to_string()))
+                    .record_result(msg.value.delivery_id, "FAILED", Some(&err.to_string()))
                     .await;
                 Err(err)
             }

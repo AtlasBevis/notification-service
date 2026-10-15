@@ -37,7 +37,7 @@ pub struct KafkaSaslConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct KafkaTopics {
-    pub send: String,
+    pub notify: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

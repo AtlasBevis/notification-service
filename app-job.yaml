@@ -30,7 +30,7 @@ kafka:
   enabled: true
   brokers:
     - "localhost:9092"
-  client_id: "notification-job"
+  client_id: "app-notification"
   timeout: 10
   security_protocol: SASL_PLAINTEXT
   sasl:
