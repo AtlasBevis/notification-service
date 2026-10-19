@@ -1,33 +1,33 @@
 use crate::config::Config;
 use crate::models::ApiResponse;
 use axum::response::IntoResponse;
-use axum::{
-    extract::Request, http::HeaderMap, middleware::Next, response::Response as AxumResponse,
-};
+use axum::{extract::Request, middleware::Next, response::Response as AxumResponse};
 
-const API_KEY_HEADER: &str = "api-key";
+use super::RequestContext;
 
-pub async fn auth_middleware(headers: HeaderMap, request: Request, next: Next) -> AxumResponse {
+pub async fn auth_middleware(request: Request, next: Next) -> AxumResponse {
     let config = Config::load();
-
-    let Some(auth) = &config.auth else {
-        return next.run(request).await;
-    };
-    if !auth.enabled {
+    if !config.auth.is_enabled() {
         return next.run(request).await;
     }
 
-    let Some(provided) = headers
-        .get(API_KEY_HEADER)
-        .and_then(|v| v.to_str().ok())
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-    else {
-        return ApiResponse::unauthorized("Missing api-key").into_response();
+    let Some(ctx) = request.extensions().get::<RequestContext>() else {
+        tracing::error!(path = %request.uri().path(), "Missing Request Context");
+        return ApiResponse::<()>::bad_request("Unknown request").into_response();
     };
 
-    if !auth.matches(provided) {
-        return ApiResponse::unauthorized("Invalid api-key").into_response();
+    let provided = ctx.headers.api_key.as_str();
+    if provided.is_empty() {
+        return ApiResponse::unauthorized("Missing x-api-key").into_response();
+    }
+
+    // is admin
+    if config.auth.is_admin(provided) {
+        return next.run(request).await;
+    }
+
+    if !config.auth.matches(provided) {
+        return ApiResponse::unauthorized("Invalid x-api-key").into_response();
     }
 
     next.run(request).await

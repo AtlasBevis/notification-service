@@ -6,9 +6,7 @@ pub struct ServerConfig {
     host: String,
     pub profile: String,
     port: u16,
-    /// Prefix of every protected HTTP route, e.g. `/notification`.
     pub base_path: String,
-    admin: String,
     pub version: String,
     pub metrics: MetricsConfig,
     pub grpc: GrpcConfig,
@@ -33,9 +31,6 @@ impl ServerConfig {
     }
     pub fn grpc_addr(&self) -> String {
         format!("{}:{}", self.host, self.grpc.port)
-    }
-    pub fn is_admin(&self, client: &str) -> bool {
-        self.admin == client
     }
 }
 

@@ -3,7 +3,6 @@ server:
   port: 8080
   base_path: "/notification"
   profile: app
-  admin: af72afa2-7a70-4a2f-93ac-905d36044526
   version: "0.1.0"
   metrics:
     enabled: true
@@ -16,13 +15,14 @@ server:
 
 auth:
   enabled: true
-  api_key: "3a563319-283a-4f3d-8c3c-954629daa1d4"
+  admin: "<key_admin>"
+  api_key: "<api-key>"
 
 postgres:
-  host: "localhost"
+  host: "<host>"
   port: 5432
   username: "notification"
-  password: "32131232"
+  password: "<password>"
   database: "notification"
   max_pool_size: 10
 
@@ -36,7 +36,7 @@ kafka:
   sasl:
     mechanism: SCRAM-SHA-512
     username: "notification"
-    password: "NotifKafka_2026!ChangeMe9"
+    password: "<password>"
   topics:
     notify: "notification.notify"
   consumer:

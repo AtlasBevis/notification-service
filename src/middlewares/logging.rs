@@ -7,7 +7,6 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use std::time::Instant;
-use tracing::{info_span, Instrument};
 
 use super::RequestContext;
 use crate::utils::StringUtils;
@@ -36,28 +35,14 @@ fn read_body(bytes: &[u8]) -> String {
 
 pub async fn logging_middleware(request: Request, next: Next) -> Response {
     let start = Instant::now();
-    let method = request.method().clone();
-    let path = request.uri().path().to_owned();
-
-    let headers = request.headers();
-    let ctx =
-        RequestContext::from_headers(headers.get("x-request-id").and_then(|v| v.to_str().ok()));
-    let request_id = ctx.request_id.clone();
-    let span = info_span!(
-        "trace",
-        request_id = %request_id,
-    );
+    let Some(ctx) = request.extensions().get::<RequestContext>().cloned() else {
+        return ApiResponse::<()>::bad_request("Unknown request").into_response();
+    };
+    let method = ctx.method;
+    let path = ctx.path;
+    let req_bytes = ctx.body.0;
 
     async move {
-        let (mut parts, body) = request.into_parts();
-        let req_bytes = match body.collect().await {
-            Ok(collected) => collected.to_bytes(),
-            Err(err) => {
-                tracing::error!(error = %err, "failed to read request body");
-                return ApiResponse::<()>::internal_error().into_response();
-            }
-        };
-
         tracing::info!(
             method = %method,
             path = %path,
@@ -68,9 +53,6 @@ pub async fn logging_middleware(request: Request, next: Next) -> Response {
             },
             "==== REQUEST INFO ===="
         );
-
-        parts.extensions.insert(ctx);
-        let request = Request::from_parts(parts, Body::from(req_bytes));
 
         let response = next.run(request).await;
         let status = response.status().as_u16();
@@ -101,6 +83,5 @@ pub async fn logging_middleware(request: Request, next: Next) -> Response {
 
         Response::from_parts(parts, Body::from(res_bytes))
     }
-    .instrument(span)
     .await
 }

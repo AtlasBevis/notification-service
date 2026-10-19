@@ -11,7 +11,7 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub server: ServerConfig,
-    pub auth: Option<AuthConfig>,
+    pub auth: AuthConfig,
     pub postgres: PostgresConfig,
     pub kafka: KafkaConfig,
 }

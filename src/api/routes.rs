@@ -3,7 +3,9 @@ use crate::api::{
     TemplateController, WebhookController,
 };
 use crate::config::Config;
-use crate::middlewares::{auth_middleware, http_metrics_middleware, logging_middleware};
+use crate::middlewares::{
+    auth_middleware, http_metrics_middleware, logging_middleware, request_context_middleware,
+};
 use crate::state::SharedState;
 use axum::{
     middleware,
@@ -49,6 +51,7 @@ fn internal_routes(state: &SharedState) -> Router {
         )
         .route_layer(middleware::from_fn(auth_middleware))
         .route_layer(middleware::from_fn(logging_middleware))
+        .route_layer(middleware::from_fn(request_context_middleware))
         .route_layer(middleware::from_fn(http_metrics_middleware))
 }
 
