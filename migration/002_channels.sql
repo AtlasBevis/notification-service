@@ -1,7 +1,5 @@
--- How a message is transported. Destination addresses live on targets.
--- EMAIL metadata:    { "host", "username", "password" }
--- MS_TEAMS metadata: {}  (incoming webhook URL is targets.metadata.url)
--- WEBHOOK metadata:  { "timeout_ms": 5000 }
+-- How a message is transported. WEBHOOK destinations live in webhook_configs;
+-- SMTP settings live in config (`smtp`).
 
 CREATE TABLE channels (
   id                INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -10,8 +8,7 @@ CREATE TABLE channels (
   updated_at        timestamptz,
 
   name              VARCHAR(255) NOT NULL,
-  status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
-  metadata          JSONB        NOT NULL DEFAULT '{}'::jsonb
+  status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE'
 );
 
 -- data

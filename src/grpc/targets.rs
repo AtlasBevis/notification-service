@@ -28,7 +28,6 @@ impl TargetGrpc {
             channel_code: data.channel.into(),
             name: data.name,
             status: data.status.into(),
-            metadata: ProtoConvert::to_struct(&data.metadata),
             created_at: Some(ProtoConvert::timestamp(data.created_at)),
             updated_at: data.updated_at.map(ProtoConvert::timestamp),
         }
@@ -75,7 +74,6 @@ impl Targets for TargetGrpc {
             code: request.code,
             channel: ProtoConvert::channel(&request.channel_code).map_err(ProtoConvert::status)?,
             name: request.name,
-            metadata: ProtoConvert::map(request.metadata),
         };
         payload.normalize();
         payload.validate().map_err(ProtoConvert::status)?;
@@ -93,10 +91,7 @@ impl Targets for TargetGrpc {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
         let code = ProtoConvert::code(&request.code, "code").map_err(ProtoConvert::status)?;
-        let mut payload = PutTargetRequest {
-            name: request.name,
-            metadata: ProtoConvert::map(request.metadata),
-        };
+        let mut payload = PutTargetRequest { name: request.name };
         payload.normalize();
 
         self.svc

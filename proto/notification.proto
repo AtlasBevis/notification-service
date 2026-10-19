@@ -75,7 +75,7 @@ message Source {
   string code = 2;
   string name = 3;
   string status = 4;
-  google.protobuf.Struct metadata = 5;
+  reserved 5; // was metadata
   google.protobuf.Timestamp created_at = 6;
   google.protobuf.Timestamp updated_at = 7;
 }
@@ -83,13 +83,13 @@ message Source {
 message CreateSourceRequest {
   string code = 1;
   string name = 2;
-  google.protobuf.Struct metadata = 3;
+  reserved 3; // was metadata
 }
 
 message PutSourceRequest {
   string code = 1;
   string name = 2;
-  google.protobuf.Struct metadata = 3;
+  reserved 3; // was metadata
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ message Target {
   string channel_code = 3;
   string name = 4;
   string status = 5;
-  google.protobuf.Struct metadata = 6;
+  reserved 6; // was metadata
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp updated_at = 8;
 }
@@ -124,13 +124,13 @@ message CreateTargetRequest {
   string code = 1;
   string channel_code = 2;
   string name = 3;
-  google.protobuf.Struct metadata = 4;
+  reserved 4; // was metadata
 }
 
 message PutTargetRequest {
   string code = 1;
   string name = 2;
-  google.protobuf.Struct metadata = 3;
+  reserved 3; // was metadata
 }
 
 // ---------------------------------------------------------------------------
@@ -172,9 +172,9 @@ message SaveTemplateRequest {
 service Definitions {
   rpc ListDefinitions(PageRequest) returns (DefinitionList);
   rpc GetDefinition(CodeRequest) returns (Definition);
-  rpc CreateDefinition(SaveDefinitionRequest) returns (Definition);
-  // `code` selects the definition to replace.
-  rpc UpdateDefinition(SaveDefinitionRequest) returns (Definition);
+  rpc CreateDefinition(CreateDefinitionRequest) returns (Definition);
+  // `code` selects the definition to replace (the URL path on HTTP).
+  rpc UpdateDefinition(PutDefinitionRequest) returns (Definition);
   rpc DeleteDefinition(CodeRequest) returns (google.protobuf.Empty);
 }
 
@@ -202,11 +202,24 @@ message DefinitionList {
   int64 total = 2;
 }
 
-message SaveDefinitionRequest {
+message CreateDefinitionRequest {
   string code = 1;
   string name = 2;
   optional string description = 3;
-  // Update keeps the stored value when omitted.
+  // Defaults to ACTIVE / INFO when omitted.
+  optional string status = 4;
+  optional string level = 5;
+  string source_code = 6;
+  string channel_code = 7;
+  // Replaces the linked targets, in this order.
+  repeated DefinitionTargetRequest targets = 8;
+}
+
+message PutDefinitionRequest {
+  string code = 1;
+  string name = 2;
+  optional string description = 3;
+  // Keeps the stored value when omitted.
   optional string status = 4;
   optional string level = 5;
   string source_code = 6;

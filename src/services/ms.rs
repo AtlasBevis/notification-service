@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::error::{AppError, AppResult};
 use crate::infras::http::HttpClient;
-use crate::models::NotifyValue;
+use crate::models::{NotifyValue, TargetData};
 use crate::services::template::wrap_teams_message;
 use crate::services::{ChannelTrait, TargetTrait};
 use crate::utils::JsonUtils;
@@ -24,6 +24,14 @@ pub struct MSService {
 }
 
 impl MSService {
+    /// MSTEAMS webhook URLs are not stored yet, so every target fails here.
+    fn teams_url(target: &TargetData) -> AppResult<String> {
+        Err(AppError::bad_request(format!(
+            "target `{}` has no Teams webhook URL (MSTEAMS is not supported yet)",
+            target.code
+        )))
+    }
+
     pub fn new(
         http: Arc<HttpClient>,
         channels: Arc<dyn ChannelTrait>,
@@ -40,7 +48,7 @@ impl MSService {
 #[async_trait]
 impl MSTrait for MSService {
     async fn send_teams(&self, request: &NotifyValue) -> AppResult<()> {
-        let channel = self.channels.get_active_by_id(request.channel_id).await?;
+        self.channels.get_active_by_id(request.channel_id).await?;
         let raw = request
             .message
             .as_deref()
@@ -53,15 +61,7 @@ impl MSTrait for MSService {
         for target_id in &request.target_ids {
             let result = async {
                 let target = self.targets.get_active_by_id(*target_id).await?;
-                let url = target
-                    .teams_webhook_url()
-                    .or_else(|| channel.teams_webhook_url().ok())
-                    .ok_or_else(|| {
-                        AppError::bad_request(format!(
-                            "Teams webhook url missing on target `{}` and channel `{}`",
-                            target.code, request.channel
-                        ))
-                    })?;
+                let url = Self::teams_url(&target)?;
                 self.http
                     .post_json(&url, &HashMap::new(), &wrap_teams_message(card.clone()))
                     .await

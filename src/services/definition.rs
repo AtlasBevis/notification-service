@@ -1,7 +1,8 @@
 use crate::enums::{Channel, Status};
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    DefinitionData, DefinitionTarget, PageData, PageRequest, SaveDefinitionRequest,
+    CreateDefinitionRequest, DefinitionData, DefinitionTarget, DefinitionTargetRequest, PageData,
+    PageRequest, PutDefinitionRequest,
 };
 use crate::repository::DefinitionRepository;
 use crate::services::{ChannelTrait, SourceTrait, TargetTrait, TemplateTrait};
@@ -13,8 +14,8 @@ pub trait DefinitionTrait: Send + Sync {
     async fn get_by_code(&self, code: &str) -> AppResult<DefinitionData>;
     async fn get_active_by_code(&self, code: &str) -> AppResult<DefinitionData>;
     async fn list(&self, page: PageRequest) -> AppResult<PageData<DefinitionData>>;
-    async fn create(&self, req: SaveDefinitionRequest) -> AppResult<DefinitionData>;
-    async fn update(&self, req: SaveDefinitionRequest) -> AppResult<DefinitionData>;
+    async fn create(&self, req: CreateDefinitionRequest) -> AppResult<DefinitionData>;
+    async fn update(&self, code: &str, req: PutDefinitionRequest) -> AppResult<DefinitionData>;
     async fn delete(&self, code: &str) -> AppResult<()>;
 }
 
@@ -27,7 +28,7 @@ pub struct DefinitionService {
     templates: Arc<dyn TemplateTrait>,
 }
 
-/// Ids a `SaveDefinitionRequest` resolves to.
+/// Ids the source, channel and targets of a definition request resolve to.
 struct ResolvedLinks {
     source_id: i32,
     channel_id: i32,
@@ -53,31 +54,36 @@ impl DefinitionService {
 
     /// Resolves the codes in the request and applies the rules a send checks
     /// later, so a definition that is saved can be sent.
-    async fn resolve(&self, req: &SaveDefinitionRequest) -> AppResult<ResolvedLinks> {
-        let source = match self.sources.get_by_code(&req.source_code).await {
+    async fn resolve(
+        &self,
+        source_code: &str,
+        channel_code: Channel,
+        items: &[DefinitionTargetRequest],
+    ) -> AppResult<ResolvedLinks> {
+        let source = match self.sources.get_by_code(source_code).await {
             Ok(source) => source,
             Err(AppError::NotFound(_)) => {
                 return Err(AppError::bad_request(format!(
                     "unknown source `{}`",
-                    req.source_code
+                    source_code
                 )))
             }
             Err(err) => return Err(err),
         };
-        let channel = match self.channels.get_by_code(req.channel).await {
+        let channel = match self.channels.get_by_code(channel_code).await {
             Ok(channel) => channel,
             Err(AppError::NotFound(_)) => {
                 return Err(AppError::bad_request(format!(
                     "unknown channel `{}`",
-                    req.channel
+                    channel_code
                 )))
             }
             Err(err) => return Err(err),
         };
         let is_webhook = channel.code == Channel::WEBHOOK;
 
-        let mut targets = Vec::with_capacity(req.targets.len());
-        for item in &req.targets {
+        let mut targets = Vec::with_capacity(items.len());
+        for item in items {
             let target = match self.targets.get_by_code(&item.target_code).await {
                 Ok(target) => target,
                 Err(AppError::NotFound(_)) => {
@@ -159,8 +165,10 @@ impl DefinitionTrait for DefinitionService {
         }
     }
 
-    async fn create(&self, req: SaveDefinitionRequest) -> AppResult<DefinitionData> {
-        let links = self.resolve(&req).await?;
+    async fn create(&self, req: CreateDefinitionRequest) -> AppResult<DefinitionData> {
+        let links = self
+            .resolve(&req.source_code, req.channel, &req.targets)
+            .await?;
         match self
             .repo
             .insert(&req, links.source_id, links.channel_id, &links.targets)
@@ -178,20 +186,27 @@ impl DefinitionTrait for DefinitionService {
         }
     }
 
-    async fn update(&self, req: SaveDefinitionRequest) -> AppResult<DefinitionData> {
-        let links = self.resolve(&req).await?;
+    async fn update(&self, code: &str, req: PutDefinitionRequest) -> AppResult<DefinitionData> {
+        let links = self
+            .resolve(&req.source_code, req.channel, &req.targets)
+            .await?;
         match self
             .repo
-            .update(&req, links.source_id, links.channel_id, &links.targets)
+            .update(
+                code,
+                &req,
+                links.source_id,
+                links.channel_id,
+                &links.targets,
+            )
             .await
         {
             Ok(row) => Ok(row),
             Err(AppError::NotFound(_)) => Err(AppError::not_found(format!(
-                "definition `{}` not found",
-                req.code
+                "definition `{code}` not found"
             ))),
             Err(err) => {
-                tracing::error!(error = %err, code = %req.code, "update definition failed");
+                tracing::error!(error = %err, code, "update definition failed");
                 Err(err)
             }
         }

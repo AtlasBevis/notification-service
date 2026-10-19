@@ -7,8 +7,7 @@ CREATE TABLE sources (
   updated_at        timestamptz,
 
   name              VARCHAR(255) NOT NULL,
-  status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
-  metadata          JSONB        NOT NULL DEFAULT '{}'::jsonb
+  status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE'
 );
 
 -- data

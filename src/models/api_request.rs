@@ -1,4 +1,3 @@
-use axum::async_trait;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, FromRequestParts, Query, Request};
 use axum::http::request::Parts;
@@ -10,7 +9,6 @@ use super::api_response::ApiResponse;
 /// JSON body extractor. Deserialize fail → 400 `ApiResponse` (handler is not called).
 pub struct ApiRequest<T>(pub T);
 
-#[async_trait]
 impl<S, T> FromRequest<S> for ApiRequest<T>
 where
     T: DeserializeOwned,
@@ -41,7 +39,6 @@ fn json_error(err: &JsonRejection) -> String {
 /// Query-string extractor. Deserialize fail → 400 `ApiResponse` (handler is not called).
 pub struct ApiQuery<T>(pub T);
 
-#[async_trait]
 impl<S, T> FromRequestParts<S> for ApiQuery<T>
 where
     T: DeserializeOwned,

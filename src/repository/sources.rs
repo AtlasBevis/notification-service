@@ -1,7 +1,6 @@
 use crate::models::{CreateSourceRequest, PageData, PageRequest, PutSourceRequest};
 use crate::utils::TimeUtils;
 use deadpool_postgres::Pool;
-use serde_json::Value;
 
 use crate::error::{AppError, AppResult};
 use crate::models::SourceData;
@@ -21,7 +20,7 @@ impl SourceRepository {
         let rows = client
             .query(
                 r#"
-                SELECT id, code, name, status, metadata, created_at, updated_at
+                SELECT id, code, name, status, created_at, updated_at
                 FROM sources
                 ORDER BY code
                 "#,
@@ -46,7 +45,7 @@ impl SourceRepository {
         let rows = client
             .query(
                 r#"
-                SELECT id, code, name, status, metadata, created_at, updated_at
+                SELECT id, code, name, status, created_at, updated_at
                 FROM sources
                 ORDER BY updated_at, created_at
                 LIMIT $1
@@ -67,7 +66,7 @@ impl SourceRepository {
         let row = client
             .query_opt(
                 r#"
-                SELECT id, code, name, status, metadata, created_at, updated_at
+                SELECT id, code, name, status, created_at, updated_at
                 FROM sources
                 WHERE code = $1
                 "#,
@@ -85,7 +84,7 @@ impl SourceRepository {
         let row = client
             .query_opt(
                 r#"
-                SELECT id, code, name, status, metadata, created_at, updated_at
+                SELECT id, code, name, status, created_at, updated_at
                 FROM sources
                 WHERE id = $1
                 "#,
@@ -103,17 +102,16 @@ impl SourceRepository {
         let row = client
             .query_one(
                 r#"
-                INSERT INTO sources (code, name, metadata)
-                VALUES ($1, $2, $3)
+                INSERT INTO sources (code, name)
+                VALUES ($1, $2)
                 RETURNING id
                 "#,
-                &[&req.code, &req.name, &Value::Object(req.metadata.clone())],
+                &[&req.code, &req.name],
             )
             .await?;
         Ok(row.get("id"))
     }
 
-    /// An empty `name` keeps the stored name; `metadata` replaces the stored value.
     pub async fn update(&self, code: &str, req: &PutSourceRequest) -> AppResult<()> {
         let client = self.pool.get().await?;
         let n = client
@@ -121,16 +119,10 @@ impl SourceRepository {
                 r#"
                 UPDATE sources
                 SET name = $2,
-                    metadata = $3,
-                    updated_at = $4
+                    updated_at = $3
                 WHERE code = $1
                 "#,
-                &[
-                    &code,
-                    &req.name,
-                    &Value::Object(req.metadata.clone()),
-                    &TimeUtils::now(),
-                ],
+                &[&code, &req.name, &TimeUtils::now()],
             )
             .await?;
 

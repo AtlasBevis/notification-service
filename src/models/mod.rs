@@ -17,7 +17,8 @@ pub use api_request::{ApiQuery, ApiRequest};
 pub use api_response::ApiResponse;
 pub use channel::ChannelData;
 pub use definition::{
-    DefinitionData, DefinitionTarget, DefinitionTargetRequest, SaveDefinitionRequest,
+    CreateDefinitionRequest, DefinitionData, DefinitionTarget, DefinitionTargetRequest,
+    PutDefinitionRequest,
 };
 pub use notification::{AcceptedNotification, DeliveryDraft};
 pub use notify_msg::{NotifyMessage, NotifyValue, TargetPayload};

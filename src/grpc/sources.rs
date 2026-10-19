@@ -27,7 +27,6 @@ impl SourceGrpc {
             code: data.code,
             name: data.name,
             status: data.status.into(),
-            metadata: ProtoConvert::to_struct(&data.metadata),
             created_at: Some(ProtoConvert::timestamp(data.created_at)),
             updated_at: data.updated_at.map(ProtoConvert::timestamp),
         }
@@ -73,7 +72,6 @@ impl Sources for SourceGrpc {
         let mut payload = CreateSourceRequest {
             code: request.code,
             name: request.name,
-            metadata: ProtoConvert::map(request.metadata),
         };
         payload.normalize();
         payload.validate().map_err(ProtoConvert::status)?;
@@ -91,10 +89,7 @@ impl Sources for SourceGrpc {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
         let code = ProtoConvert::code(&request.code, "code").map_err(ProtoConvert::status)?;
-        let mut payload = PutSourceRequest {
-            name: request.name,
-            metadata: ProtoConvert::map(request.metadata),
-        };
+        let mut payload = PutSourceRequest { name: request.name };
         payload.normalize();
 
         self.svc

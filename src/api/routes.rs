@@ -6,13 +6,17 @@ use crate::config::Config;
 use crate::middlewares::{
     auth_middleware, http_metrics_middleware, logging_middleware, request_context_middleware,
 };
+use crate::models::ApiResponse;
 use crate::state::SharedState;
 use axum::{
     middleware,
+    response::{IntoResponse, Response},
     routing::{get, post},
     Router,
 };
+use std::any::Any;
 use std::sync::Arc;
+use tower_http::catch_panic::CatchPanicLayer;
 
 const HEALTH_API: &str = "/health";
 const NOTI_API: &str = "/noti";
@@ -24,12 +28,28 @@ const WEBHOOKS_API: &str = "/webhooks";
 
 /// `/health` is public at the root; everything else is protected under `server.base_path`.
 /// Handlers are controller methods; each group of routes takes its controller as state.
+/// `CatchPanicLayer` is the outermost layer: a panic anywhere below it (handlers and
+/// the route middlewares) becomes a 500 `ApiResponse` instead of a dropped connection.
 pub fn app_routes(state: SharedState) -> Router {
     let base_path = Config::load().server.base_path.as_str();
 
     Router::new()
         .merge(health_routes(state.health_controller.clone()))
         .nest(base_path, internal_routes(&state))
+        .layer(CatchPanicLayer::custom(panic_response))
+}
+
+/// Turns a panic in a handler or route middleware into a 500 `ApiResponse`.
+fn panic_response(err: Box<dyn Any + Send + 'static>) -> Response {
+    let detail = if let Some(s) = err.downcast_ref::<String>() {
+        s.as_str()
+    } else if let Some(s) = err.downcast_ref::<&str>() {
+        s
+    } else {
+        "unknown panic"
+    };
+    tracing::error!(panic = %detail, "request handler panicked");
+    ApiResponse::<()>::internal_error().into_response()
 }
 
 fn internal_routes(state: &SharedState) -> Router {
@@ -76,7 +96,7 @@ fn source_routes(controller: Arc<SourceController>) -> Router {
                 .post(SourceController::create_source)
                 .put(SourceController::update_source),
         )
-        .route("/:code", get(SourceController::get_source))
+        .route("/{code}", get(SourceController::get_source))
         .with_state(controller)
 }
 
@@ -87,7 +107,7 @@ fn target_routes(controller: Arc<TargetController>) -> Router {
             get(TargetController::list_targets).post(TargetController::create_target),
         )
         .route(
-            "/:code",
+            "/{code}",
             get(TargetController::get_target).put(TargetController::update_target),
         )
         .with_state(controller)
@@ -101,7 +121,7 @@ fn definition_routes(controller: Arc<DefinitionController>) -> Router {
                 .post(DefinitionController::create_definition),
         )
         .route(
-            "/:code",
+            "/{code}",
             get(DefinitionController::get_definition)
                 .put(DefinitionController::update_definition)
                 .delete(DefinitionController::delete_definition),
@@ -122,7 +142,7 @@ fn webhook_routes(controller: Arc<WebhookController>) -> Router {
             get(WebhookController::list_webhooks).post(WebhookController::create_webhook),
         )
         .route(
-            "/:code",
+            "/{code}",
             get(WebhookController::get_webhook)
                 .put(WebhookController::update_webhook)
                 .delete(WebhookController::delete_webhook),

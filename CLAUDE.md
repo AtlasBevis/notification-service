@@ -29,11 +29,12 @@ The project builds two binaries:
 ## Definitions and templates
 
 - A definition maps a `code` to a source, a channel, and one or more targets (`definition_targets`).
-- Definitions are managed through `/notification/definitions` (list, get, create, update, delete). Create and update share `SaveDefinitionRequest`.
+- Definitions are managed through `/notification/definitions` (list, get, create, update, delete). Create takes `CreateDefinitionRequest`; update takes `PutDefinitionRequest` (same fields without `code`, which comes from the URL). Both share their checks through `DefinitionRules`.
 - `DefinitionService` resolves `source_code`, `channel_code`, and each `target_code`, and rejects what a send would reject: a target on another channel, a template format that does not match the channel, or EMAIL/MSTEAMS without any template.
 - An update replaces `definition_targets` in the given order.
 - Templates are selected per target by `definition_targets.template_id`; `definitions` has no `template_id`.
 - A WEBHOOK target with a template sends that `format = 'JSON'` template as its request body; without one it sends the request's `variables` unchanged.
+- Sources, channels, and targets have no `metadata`. EMAIL recipients and MSTEAMS URLs are not stored yet, so a send on the EMAIL or MSTEAMS channel is rejected with `400 channel ... is not supported yet`; only WEBHOOK delivers. SMTP settings are the `smtp` config section.
 - EMAIL and MSTEAMS require a template and render one title/body from the first linked target that has one.
 
 ## Webhooks
@@ -100,7 +101,7 @@ src/
 - Default listen address is `0.0.0.0:8080`.
 - A field missing from `app.yaml` / `app-job.yaml` fails startup with a parse error (only the `auth` section is optional).
 - `app-job.yaml` sets `kafka.consumer.enabled: true` and its own `kafka.client_id`; the job refuses to start when the consumer is disabled or Kafka is not connected.
-- Secret overrides from env (applied when set) include `POSTGRES_PASSWORD`, `KAFKA_BROKERS`, `KAFKA_SASL_USERNAME`, and `KAFKA_SASL_PASSWORD`.
+- Secret overrides from env (applied when set) include `POSTGRES_PASSWORD`, `KAFKA_BROKERS`, `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD`, `SMTP_USERNAME`, and `SMTP_PASSWORD`.
 - `auth.api_key` comes from config/ConfigMap.
 
 ## Documentation

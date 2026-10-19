@@ -5,6 +5,7 @@ use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use serde_json::Value;
 
+use crate::config::Config;
 use crate::error::{AppError, AppResult};
 use crate::models::NotifyValue;
 use crate::services::ChannelTrait;
@@ -28,20 +29,16 @@ impl EmailService {
 #[async_trait]
 impl EmailTrait for EmailService {
     async fn send_email(&self, request: &NotifyValue) -> AppResult<()> {
-        let channel = self.channels.get_active_by_id(request.channel_id).await?;
-        let smtp = channel.smtp_config()?;
+        self.channels.get_active_by_id(request.channel_id).await?;
+        let smtp = Config::load().smtp.clone();
         if request.recipients.to.is_empty() {
-            return Err(AppError::bad_request(
-                "target metadata.to is required for EMAIL",
-            ));
+            return Err(AppError::bad_request("email.to is required for EMAIL"));
         }
 
-        let from: lettre::message::Mailbox = smtp.username.parse().map_err(|_| {
-            AppError::bad_request(format!(
-                "channel `{}` metadata.username is not a valid mailbox",
-                channel.code
-            ))
-        })?;
+        let from: lettre::message::Mailbox = smtp
+            .username
+            .parse()
+            .map_err(|_| AppError::internal("config smtp.username is not a valid mailbox"))?;
         let title = request
             .title
             .as_deref()

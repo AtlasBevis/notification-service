@@ -121,23 +121,14 @@ impl NotifyService {
             }
         };
 
-        let mut recipients = crate::models::Recipients::default();
-        for target in targets {
-            let group = target.recipients();
-            recipients.to.extend(group.to);
-            recipients.cc.extend(group.cc);
-            recipients.bcc.extend(group.bcc);
-        }
-        if channel_code.eq_ignore_ascii_case(Channel::EMAIL.as_str()) && !recipients.has_to() {
+        // EMAIL recipients and MSTEAMS URLs are not stored yet, so these channels
+        // cannot be delivered; reject them before anything is recorded.
+        if matches!(channel.code, Channel::EMAIL | Channel::MSTEAMS) {
             return Err(AppError::bad_request(format!(
-                "target `{}` metadata.to is required for EMAIL channel",
-                targets
-                    .iter()
-                    .map(|item| item.code.as_str())
-                    .collect::<Vec<_>>()
-                    .join(",")
+                "channel `{channel_code}` is not supported yet"
             )));
         }
+        let recipients = crate::models::Recipients::default();
 
         let (template_name, title, message) = match template {
             Some(template) => {

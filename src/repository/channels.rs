@@ -20,7 +20,7 @@ impl ChannelRepository {
         let rows = client
             .query(
                 r#"
-                SELECT id, code, name, status, metadata, created_at, updated_at
+                SELECT id, code, name, status, created_at, updated_at
                 FROM channels
                 "#,
                 &[],
@@ -34,7 +34,7 @@ impl ChannelRepository {
         let row = client
             .query_opt(
                 r#"
-                SELECT id, code, name, status, metadata, created_at, updated_at
+                SELECT id, code, name, status, created_at, updated_at
                 FROM channels
                 WHERE code = $1
                 "#,
@@ -50,7 +50,7 @@ impl ChannelRepository {
         let row = client
             .query_opt(
                 r#"
-                SELECT id, code, name, status, metadata, created_at, updated_at
+                SELECT id, code, name, status, created_at, updated_at
                 FROM channels
                 WHERE id = $1
                 "#,

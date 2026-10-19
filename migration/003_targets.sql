@@ -1,6 +1,6 @@
 -- A reusable destination group for EMAIL, MSTEAMS, or WEBHOOK.
--- EMAIL:    { "to": [], "cc": [], "bcc": [] }
--- MSTEAMS:  { "url": "https://..." }
+-- A WEBHOOK target's destination is in webhook_configs + webhook_auth_configs.
+-- EMAIL recipients and MSTEAMS URLs are not stored yet.
 -- Definitions select one or more targets through definition_targets.
 
 CREATE TABLE targets (
@@ -11,6 +11,5 @@ CREATE TABLE targets (
 
   name              VARCHAR(255) NOT NULL,
   channel_id        INT          NOT NULL REFERENCES channels (id),
-  status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
-  metadata          JSONB        NOT NULL DEFAULT '{}'::jsonb
+  status            VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE'
 );

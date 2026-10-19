@@ -1,10 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 
 use crate::enums::{Channel, Status};
 use crate::error::{AppError, AppResult};
-use crate::utils::JsonUtils;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetData {
@@ -13,7 +11,6 @@ pub struct TargetData {
     pub channel: Channel,
     pub name: String,
     pub status: Status,
-    pub metadata: Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
@@ -32,62 +29,26 @@ impl TargetData {
             status: Status::parse(&status).ok_or_else(|| {
                 AppError::internal(format!("unknown status `{status}` in targets"))
             })?,
-            metadata: row.get("metadata"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
             updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
         })
     }
-
-    /// EMAIL addresses from metadata `{ "to": [], "cc": [], "bcc": [] }`.
-    pub fn recipients(&self) -> Recipients {
-        Recipients::from_metadata(&self.metadata)
-    }
-
-    /// MSTEAMS webhook URL from `metadata.url` (fallback when channel has no url).
-    pub fn teams_webhook_url(&self) -> Option<String> {
-        JsonUtils::get_string(&self.metadata, "url")
-    }
 }
 
-/// Resolved email destinations (snapshot for deliveries / dispatch).
+/// EMAIL recipients snapshot sent with a delivery.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Recipients {
-    #[serde(default)]
     pub to: Vec<String>,
-
     #[serde(default)]
     pub cc: Vec<String>,
-
     #[serde(default)]
     pub bcc: Vec<String>,
 }
 
 impl Recipients {
-    pub fn from_metadata(metadata: &Value) -> Self {
-        Self {
-            to: string_list(metadata, "to"),
-            cc: string_list(metadata, "cc"),
-            bcc: string_list(metadata, "bcc"),
-        }
-    }
-
     pub fn has_to(&self) -> bool {
         !self.to.is_empty()
     }
-}
-
-fn string_list(metadata: &Value, key: &str) -> Vec<String> {
-    metadata
-        .get(key)
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str())
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect()
-        })
-        .unwrap_or_default()
 }
 
 /// Body of `POST /targets`.
@@ -98,9 +59,6 @@ pub struct CreateTargetRequest {
     pub channel: Channel,
 
     pub name: String,
-
-    #[serde(default)]
-    pub metadata: Map<String, Value>,
 }
 
 impl CreateTargetRequest {
@@ -132,8 +90,6 @@ impl CreateTargetRequest {
 #[derive(Debug, Clone, Deserialize)]
 pub struct PutTargetRequest {
     pub name: String,
-    #[serde(default)]
-    pub metadata: Map<String, Value>,
 }
 
 impl PutTargetRequest {

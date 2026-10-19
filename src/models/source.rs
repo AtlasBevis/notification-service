@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 
 use crate::enums::Status;
 use crate::error::{AppError, AppResult};
@@ -13,7 +12,6 @@ pub struct SourceData {
     pub status: Status,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
-    pub metadata: Value,
 }
 
 impl SourceData {
@@ -26,7 +24,6 @@ impl SourceData {
             status: Status::parse(&status).ok_or_else(|| {
                 AppError::internal(format!("unknown status `{status}` in sources"))
             })?,
-            metadata: row.get("metadata"),
             created_at: row.get::<_, DateTime<Utc>>("created_at"),
             updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
         })
@@ -38,8 +35,6 @@ impl SourceData {
 pub struct CreateSourceRequest {
     pub code: String,
     pub name: String,
-    #[serde(default)]
-    pub metadata: Map<String, Value>,
 }
 
 impl CreateSourceRequest {
@@ -72,9 +67,6 @@ impl CreateSourceRequest {
 #[derive(Debug, Clone, Deserialize)]
 pub struct PutSourceRequest {
     pub name: String,
-
-    #[serde(default)]
-    pub metadata: Map<String, Value>,
 }
 
 impl PutSourceRequest {

@@ -3,7 +3,6 @@ server:
   port: 8080
   base_path: "/notification"
   profile: job
-  admin: af72afa2-7a70-4a2f-93ac-905d36044526
   version: "0.1.0"
   metrics:
     enabled: true
@@ -15,8 +14,9 @@ server:
     timeout: 60
 
 auth:
-  enabled: true
-  api_key: "3a563319-283a-4f3d-8c3c-954629daa1d4"
+  enabled: false
+  admin: ""
+  api_key: ""
 
 postgres:
   host: "127.0.0.1"
@@ -44,3 +44,8 @@ kafka:
     max_wait_ms: 1000
     max_poll_records: 100
     start_offset: latest
+
+smtp:
+  host: "smtp.office365.com"
+  username: ""
+  password: ""

@@ -51,12 +51,10 @@ pub struct DefinitionTarget {
     pub template_id: Option<i32>,
 }
 
-/// Body of both create and update. Update takes `code` from the path, and
-/// keeps the stored `status` / `level` when they are omitted; `targets`
-/// always replaces the linked targets, in the given order.
+/// Body of `POST /definitions`. Omitted `status` / `level` default to
+/// `ACTIVE` / `INFO`; `targets` is stored in the given order.
 #[derive(Debug, Clone, Deserialize)]
-pub struct SaveDefinitionRequest {
-    #[serde(default)]
+pub struct CreateDefinitionRequest {
     pub code: String,
     pub name: String,
     #[serde(default)]
@@ -70,28 +68,15 @@ pub struct SaveDefinitionRequest {
     pub targets: Vec<DefinitionTargetRequest>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct DefinitionTargetRequest {
-    pub target_code: String,
-    #[serde(default)]
-    pub template_id: Option<i32>,
-}
-
-impl SaveDefinitionRequest {
+impl CreateDefinitionRequest {
     pub fn normalize(&mut self) {
         self.code = self.code.trim().to_ascii_uppercase();
         self.name = self.name.trim().to_string();
-        self.description = self
-            .description
-            .take()
-            .map(|d| d.trim().to_string())
-            .filter(|d| !d.is_empty());
-        self.status = self.status.take().map(|s| s.trim().to_ascii_uppercase());
-        self.level = self.level.take().map(|l| l.trim().to_ascii_uppercase());
+        self.description = DefinitionRules::normalize_description(self.description.take());
+        self.status = DefinitionRules::normalize_upper(self.status.take());
+        self.level = DefinitionRules::normalize_upper(self.level.take());
         self.source_code = self.source_code.trim().to_ascii_uppercase();
-        for target in &mut self.targets {
-            target.target_code = target.target_code.trim().to_ascii_uppercase();
-        }
+        DefinitionRules::normalize_targets(&mut self.targets);
     }
 
     pub fn validate(&self) -> AppResult<()> {
@@ -110,20 +95,106 @@ impl SaveDefinitionRequest {
                 "code must be alphanumeric, '_' or '-'",
             ));
         }
-        if self.name.is_empty() {
+        DefinitionRules::check(
+            &self.name,
+            &self.description,
+            &self.status,
+            &self.level,
+            &self.source_code,
+            &self.targets,
+        )
+    }
+}
+
+/// Body of `PUT /definitions/{code}`; the code comes from the URL. Omitted
+/// `status` / `level` keep the stored value; `targets` replaces the linked
+/// targets, in the given order.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PutDefinitionRequest {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub level: Option<String>,
+    pub source_code: String,
+    pub channel: Channel,
+    pub targets: Vec<DefinitionTargetRequest>,
+}
+
+impl PutDefinitionRequest {
+    pub fn normalize(&mut self) {
+        self.name = self.name.trim().to_string();
+        self.description = DefinitionRules::normalize_description(self.description.take());
+        self.status = DefinitionRules::normalize_upper(self.status.take());
+        self.level = DefinitionRules::normalize_upper(self.level.take());
+        self.source_code = self.source_code.trim().to_ascii_uppercase();
+        DefinitionRules::normalize_targets(&mut self.targets);
+    }
+
+    pub fn validate(&self) -> AppResult<()> {
+        DefinitionRules::check(
+            &self.name,
+            &self.description,
+            &self.status,
+            &self.level,
+            &self.source_code,
+            &self.targets,
+        )
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct DefinitionTargetRequest {
+    pub target_code: String,
+    #[serde(default)]
+    pub template_id: Option<i32>,
+}
+
+/// Normalization and checks shared by `CreateDefinitionRequest` and
+/// `PutDefinitionRequest` (every field except `code`).
+pub struct DefinitionRules;
+
+impl DefinitionRules {
+    fn normalize_description(description: Option<String>) -> Option<String> {
+        description
+            .map(|d| d.trim().to_string())
+            .filter(|d| !d.is_empty())
+    }
+
+    fn normalize_upper(value: Option<String>) -> Option<String> {
+        value.map(|v| v.trim().to_ascii_uppercase())
+    }
+
+    fn normalize_targets(targets: &mut [DefinitionTargetRequest]) {
+        for target in targets {
+            target.target_code = target.target_code.trim().to_ascii_uppercase();
+        }
+    }
+
+    fn check(
+        name: &str,
+        description: &Option<String>,
+        status: &Option<String>,
+        level: &Option<String>,
+        source_code: &str,
+        targets: &[DefinitionTargetRequest],
+    ) -> AppResult<()> {
+        if name.is_empty() {
             return Err(AppError::bad_request("name is required"));
         }
-        if self.name.chars().count() > 255 {
+        if name.chars().count() > 255 {
             return Err(AppError::bad_request("name must be at most 255 characters"));
         }
-        if let Some(description) = &self.description {
+        if let Some(description) = description {
             if description.chars().count() > 255 {
                 return Err(AppError::bad_request(
                     "description must be at most 255 characters",
                 ));
             }
         }
-        if let Some(status) = &self.status {
+        if let Some(status) = status {
             if !matches!(
                 Status::parse(status),
                 Some(Status::Active | Status::Inactive)
@@ -131,24 +202,24 @@ impl SaveDefinitionRequest {
                 return Err(AppError::bad_request("status must be ACTIVE or INACTIVE"));
             }
         }
-        if let Some(level) = &self.level {
+        if let Some(level) = level {
             if Level::parse(level).is_none() {
                 return Err(AppError::bad_request(
                     "level must be INFO, WARN, ERROR or CRITICAL",
                 ));
             }
         }
-        if self.source_code.is_empty() {
+        if source_code.is_empty() {
             return Err(AppError::bad_request("source_code is required"));
         }
-        if self.targets.is_empty() {
+        if targets.is_empty() {
             return Err(AppError::bad_request("targets must not be empty"));
         }
-        for (i, target) in self.targets.iter().enumerate() {
+        for (i, target) in targets.iter().enumerate() {
             if target.target_code.is_empty() {
                 return Err(AppError::bad_request("targets.target_code is required"));
             }
-            if self.targets[..i]
+            if targets[..i]
                 .iter()
                 .any(|t| t.target_code == target.target_code)
             {

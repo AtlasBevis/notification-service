@@ -7,10 +7,14 @@ use crate::error::AppResult;
 use super::convert::ProtoConvert;
 use super::pb::definitions_server::Definitions;
 use super::pb::{
-    CodeRequest, Definition, DefinitionList, DefinitionTarget, PageRequest as PageRpcRequest,
-    SaveDefinitionRequest as SaveDefinitionRpcRequest,
+    CodeRequest, CreateDefinitionRequest as CreateDefinitionRpcRequest, Definition, DefinitionList,
+    DefinitionTarget, DefinitionTargetRequest as DefinitionTargetRpcRequest,
+    PageRequest as PageRpcRequest, PutDefinitionRequest as PutDefinitionRpcRequest,
 };
-use crate::models::{DefinitionData, DefinitionTargetRequest, PageRequest, SaveDefinitionRequest};
+use crate::models::{
+    CreateDefinitionRequest, DefinitionData, DefinitionTargetRequest, PageRequest,
+    PutDefinitionRequest,
+};
 use crate::services::DefinitionTrait;
 
 /// gRPC counterpart of `DefinitionController`.
@@ -23,8 +27,8 @@ impl DefinitionGrpc {
         Self { svc }
     }
 
-    fn to_request(request: SaveDefinitionRpcRequest) -> AppResult<SaveDefinitionRequest> {
-        Ok(SaveDefinitionRequest {
+    fn to_create(request: CreateDefinitionRpcRequest) -> AppResult<CreateDefinitionRequest> {
+        Ok(CreateDefinitionRequest {
             code: request.code,
             name: request.name,
             description: request.description,
@@ -32,15 +36,33 @@ impl DefinitionGrpc {
             level: request.level,
             source_code: request.source_code,
             channel: ProtoConvert::channel(&request.channel_code)?,
-            targets: request
-                .targets
-                .into_iter()
-                .map(|t| DefinitionTargetRequest {
-                    target_code: t.target_code,
-                    template_id: t.template_id,
-                })
-                .collect(),
+            targets: Self::to_targets(request.targets),
         })
+    }
+
+    /// The `code` selecting the definition, and its replacement fields.
+    fn to_put(request: PutDefinitionRpcRequest) -> AppResult<(String, PutDefinitionRequest)> {
+        let code = ProtoConvert::code(&request.code, "code")?;
+        let body = PutDefinitionRequest {
+            name: request.name,
+            description: request.description,
+            status: request.status,
+            level: request.level,
+            source_code: request.source_code,
+            channel: ProtoConvert::channel(&request.channel_code)?,
+            targets: Self::to_targets(request.targets),
+        };
+        Ok((code, body))
+    }
+
+    fn to_targets(targets: Vec<DefinitionTargetRpcRequest>) -> Vec<DefinitionTargetRequest> {
+        targets
+            .into_iter()
+            .map(|t| DefinitionTargetRequest {
+                target_code: t.target_code,
+                template_id: t.template_id,
+            })
+            .collect()
     }
 
     fn to_reply(data: DefinitionData) -> Definition {
@@ -103,9 +125,9 @@ impl Definitions for DefinitionGrpc {
 
     async fn create_definition(
         &self,
-        request: Request<SaveDefinitionRpcRequest>,
+        request: Request<CreateDefinitionRpcRequest>,
     ) -> Result<Response<Definition>, Status> {
-        let mut payload = Self::to_request(request.into_inner()).map_err(ProtoConvert::status)?;
+        let mut payload = Self::to_create(request.into_inner()).map_err(ProtoConvert::status)?;
         payload.normalize();
         payload.validate().map_err(ProtoConvert::status)?;
 
@@ -119,15 +141,16 @@ impl Definitions for DefinitionGrpc {
 
     async fn update_definition(
         &self,
-        request: Request<SaveDefinitionRpcRequest>,
+        request: Request<PutDefinitionRpcRequest>,
     ) -> Result<Response<Definition>, Status> {
-        let mut payload = Self::to_request(request.into_inner()).map_err(ProtoConvert::status)?;
+        let (code, mut payload) =
+            Self::to_put(request.into_inner()).map_err(ProtoConvert::status)?;
         payload.normalize();
         payload.validate().map_err(ProtoConvert::status)?;
 
         let data = self
             .svc
-            .update(payload)
+            .update(&code, payload)
             .await
             .map_err(ProtoConvert::status)?;
         Ok(Response::new(Self::to_reply(data)))

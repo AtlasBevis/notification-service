@@ -1,7 +1,6 @@
 use crate::models::{PageData, PageRequest};
 use crate::utils::TimeUtils;
 use deadpool_postgres::Pool;
-use serde_json::Value;
 
 use crate::{
     enums::Status,
@@ -35,8 +34,8 @@ impl TargetsRepository {
         let rows = client
             .query(
                 r#"
-                SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
-                       t.metadata, t.created_at, t.updated_at
+                SELECT t.id, t.code, c.code AS channel, t.name, t.status,
+                       t.created_at, t.updated_at
                 FROM targets t
                 JOIN channels c ON c.id = t.channel_id
                 ORDER BY t.updated_at, t.created_at
@@ -58,8 +57,8 @@ impl TargetsRepository {
         let row = client
             .query_opt(
                 r#"
-                SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
-                       t.metadata, t.created_at, t.updated_at
+                SELECT t.id, t.code, c.code AS channel, t.name, t.status,
+                       t.created_at, t.updated_at
                 FROM targets t
                 JOIN channels c ON c.id = t.channel_id
                 WHERE t.code = $1
@@ -76,8 +75,8 @@ impl TargetsRepository {
         let row = client
             .query_opt(
                 r#"
-                SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
-                       t.metadata, t.created_at, t.updated_at
+                SELECT t.id, t.code, c.code AS channel, t.name, t.status,
+                       t.created_at, t.updated_at
                 FROM targets t
                 JOIN channels c ON c.id = t.channel_id
                 WHERE t.id = $1
@@ -94,7 +93,7 @@ impl TargetsRepository {
         let row = client
             .query_one(
                 r#"
-                INSERT INTO targets (code, channel_id, name, status, metadata)
+                INSERT INTO targets (code, channel_id, name, status, updated_at)
                 VALUES ($1, $2, $3, $4, $5)
                 RETURNING id
                 "#,
@@ -103,14 +102,14 @@ impl TargetsRepository {
                     &channel_id,
                     &req.name,
                     &Status::Active.as_str(),
-                    &Value::Object(req.metadata.clone()),
+                    &TimeUtils::now(),
                 ],
             )
             .await?;
         Ok(row.get("id"))
     }
 
-    /// The channel never changes; `name` and `metadata` replace the stored values.
+    /// The channel never changes; `name` replaces the stored value.
     pub async fn update(&self, code: &str, req: &PutTargetRequest) -> AppResult<()> {
         let client = self.pool.get().await?;
         let n = client
@@ -118,21 +117,15 @@ impl TargetsRepository {
                 r#"
                 UPDATE targets
                 SET name = $2,
-                    metadata = $3,
-                    updated_at = $4
+                    updated_at = $3
                 WHERE code = $1
                 "#,
-                &[
-                    &code,
-                    &req.name,
-                    &Value::Object(req.metadata.clone()),
-                    &TimeUtils::now(),
-                ],
+                &[&code, &req.name, &TimeUtils::now()],
             )
             .await?;
 
         if n == 0 {
-            return Err(AppError::not_found(format!("target `{}` not found", code)));
+            return Err(AppError::not_found(format!("target `{code}` not found")));
         }
         Ok(())
     }

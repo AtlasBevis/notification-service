@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::models::{
-    ApiQuery, ApiRequest, ApiResponse, DefinitionData, PageData, PageRequest, SaveDefinitionRequest,
+    ApiQuery, ApiRequest, ApiResponse, CreateDefinitionRequest, DefinitionData, PageData,
+    PageRequest, PutDefinitionRequest,
 };
 use crate::services::DefinitionTrait;
 use axum::extract::{Path, State};
@@ -46,7 +47,7 @@ impl DefinitionController {
 
     pub async fn create_definition(
         State(this): State<Arc<Self>>,
-        ApiRequest(mut payload): ApiRequest<SaveDefinitionRequest>,
+        ApiRequest(mut payload): ApiRequest<CreateDefinitionRequest>,
     ) -> ApiResponse<DefinitionData> {
         payload.normalize();
         if let Err(err) = payload.validate() {
@@ -59,19 +60,21 @@ impl DefinitionController {
         }
     }
 
-    /// The path `code` selects the definition; a `code` in the body is ignored.
     pub async fn update_definition(
         State(this): State<Arc<Self>>,
         Path(code): Path<String>,
-        ApiRequest(mut payload): ApiRequest<SaveDefinitionRequest>,
+        ApiRequest(mut payload): ApiRequest<PutDefinitionRequest>,
     ) -> ApiResponse<DefinitionData> {
-        payload.code = code;
+        let code = code.trim().to_ascii_uppercase();
+        if code.is_empty() {
+            return ApiResponse::bad_request("code is required");
+        }
         payload.normalize();
         if let Err(err) = payload.validate() {
             return err.to_response();
         }
 
-        match this.svc.update(payload).await {
+        match this.svc.update(&code, payload).await {
             Ok(data) => ApiResponse::success(data),
             Err(err) => err.to_response(),
         }

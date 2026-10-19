@@ -1,4 +1,4 @@
-use super::{AuthConfig, KafkaConfig, PostgresConfig, ServerConfig};
+use super::{AuthConfig, KafkaConfig, PostgresConfig, ServerConfig, SmtpConfig};
 use crate::error::{AppError, AppResult};
 use crate::utils::StringUtils;
 use serde::Deserialize;
@@ -14,6 +14,7 @@ pub struct Config {
     pub auth: AuthConfig,
     pub postgres: PostgresConfig,
     pub kafka: KafkaConfig,
+    pub smtp: SmtpConfig,
 }
 
 impl Config {
@@ -28,7 +29,7 @@ impl Config {
         let content = fs::read_to_string(&path).map_err(|e| {
             AppError::internal_with(format!("Failed to read config file `{path}`"), e)
         })?;
-        let mut config: Config = serde_yaml::from_str(&content).map_err(|e| {
+        let mut config: Config = serde_norway::from_str(&content).map_err(|e| {
             AppError::internal_with(format!("Failed to parse config file `{path}`"), e)
         })?;
         config.apply_secrets();
@@ -53,7 +54,10 @@ impl Config {
 
     /// Override sensitive fields from env when set (non-empty).
     fn apply_secrets(&mut self) {
-        if let Some(v) = StringUtils::get_env("POSTGRES_PASSWORD") {
+        if let Some(v) = StringUtils::get_env("DB_USERNAME") {
+            self.postgres.username = v;
+        }
+        if let Some(v) = StringUtils::get_env("DB_PASSWORD") {
             self.postgres.password = v;
         }
         if let Some(v) = StringUtils::get_env("KAFKA_USERNAME") {
@@ -61,6 +65,12 @@ impl Config {
         }
         if let Some(v) = StringUtils::get_env("KAFKA_PASSWORD") {
             self.kafka.sasl.password = v;
+        }
+        if let Some(v) = StringUtils::get_env("SMTP_USERNAME") {
+            self.smtp.username = v;
+        }
+        if let Some(v) = StringUtils::get_env("SMTP_PASSWORD") {
+            self.smtp.password = v;
         }
     }
 }

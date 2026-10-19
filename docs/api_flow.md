@@ -162,7 +162,7 @@ For `TOKEN_ENDPOINT`, set `auth_mode = 'TOKEN_ENDPOINT'`, provide `token_url`, `
 | `PUT /webhooks/{target_code}` | `notification.v1.Webhooks/UpdateWebhook` (`target_code` in the message) |
 | `DELETE /webhooks/{target_code}` | `notification.v1.Webhooks/DeleteWebhook` |
 
-JSON objects (`variables`, `metadata`, `headers`, `request_headers`, `request_body`) are `google.protobuf.Struct`, timestamps are `google.protobuf.Timestamp`, and enum-like values stay strings. Webhook fields with an HTTP default are `optional` in the proto and take the same default when omitted; send `expires_in_path: ""` to clear it.
+JSON objects (`variables`, `headers`, `request_headers`, `request_body`) are `google.protobuf.Struct`, timestamps are `google.protobuf.Timestamp`, and enum-like values stay strings. Webhook fields with an HTTP default are `optional` in the proto and take the same default when omitted; send `expires_in_path: ""` to clear it.
 
 | | HTTP | gRPC |
 |---|---|---|
@@ -207,11 +207,11 @@ Webhook method and timeout come from `webhook_configs`. Each webhook delivery ca
 | `GET` | `/notification/sources` | List sources |
 | `POST` | `/notification/sources` | Create a source |
 | `GET` | `/notification/sources/{code}` | Read a source |
-| `PUT` | `/notification/sources/{code}` | Update a source (`PutSourceRequest`: code from the URL; `name` required, `name` and `metadata` replace the stored values) |
+| `PUT` | `/notification/sources/{code}` | Update a source (`PutSourceRequest`: code from the URL; `name` replaces the stored value) |
 | `GET` | `/notification/targets` | List targets |
-| `POST` | `/notification/targets` | Create a target |
+| `POST` | `/notification/targets` | Create a target (a WEBHOOK target is then configured through `/webhooks`; EMAIL and MSTEAMS cannot be delivered yet) |
 | `GET` | `/notification/targets/{code}` | Read a target |
-| `PUT` | `/notification/targets/{code}` | Update a target (`PutTargetRequest`: code from the URL, the channel never changes; `name` required, `name` and `metadata` replace the stored values) |
+| `PUT` | `/notification/targets/{code}` | Update a target (`PutTargetRequest`: code from the URL, the channel never changes; `name` replaces the stored value) |
 | `POST` | `/notification/templates` | Create a template version (creates the template on first use of `name`) |
 | `GET` | `/notification/definitions` | List definitions |
 | `POST` | `/notification/definitions` | Create a definition |

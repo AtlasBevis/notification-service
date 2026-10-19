@@ -4,7 +4,9 @@ use deadpool_postgres::{Pool, Transaction};
 
 use crate::enums::{Level, Status};
 use crate::error::{AppError, AppResult};
-use crate::models::{DefinitionData, DefinitionTarget, SaveDefinitionRequest};
+use crate::models::{
+    CreateDefinitionRequest, DefinitionData, DefinitionTarget, PutDefinitionRequest,
+};
 
 #[derive(Clone)]
 pub struct DefinitionRepository {
@@ -111,7 +113,7 @@ impl DefinitionRepository {
 
     pub async fn insert(
         &self,
-        req: &SaveDefinitionRequest,
+        req: &CreateDefinitionRequest,
         source_id: i32,
         channel_id: i32,
         targets: &[DefinitionTarget],
@@ -149,7 +151,8 @@ impl DefinitionRepository {
     /// `status` / `level` keeps the stored value.
     pub async fn update(
         &self,
-        req: &SaveDefinitionRequest,
+        code: &str,
+        req: &PutDefinitionRequest,
         source_id: i32,
         channel_id: i32,
         targets: &[DefinitionTarget],
@@ -172,7 +175,7 @@ impl DefinitionRepository {
                 RETURNING id
                 "#,
                 &[
-                    &req.code,
+                    &code,
                     &req.name,
                     &req.description,
                     &req.status,
@@ -183,7 +186,7 @@ impl DefinitionRepository {
                 ],
             )
             .await?;
-        let row = row.ok_or_else(|| AppError::not_found(format!("code {} not found", req.code)))?;
+        let row = row.ok_or_else(|| AppError::not_found(format!("code {code} not found")))?;
         let id: i64 = row.get("id");
 
         tx.execute(
