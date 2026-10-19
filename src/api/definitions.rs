@@ -17,9 +17,8 @@ impl DefinitionController {
 
     pub async fn list_definitions(
         State(this): State<Arc<Self>>,
-        ApiQuery(mut page): ApiQuery<PageRequest>,
+        ApiQuery(page): ApiQuery<PageRequest>,
     ) -> ApiResponse<PageData<DefinitionData>> {
-        page.normalize();
         if let Err(err) = page.validate() {
             return err.to_response();
         }

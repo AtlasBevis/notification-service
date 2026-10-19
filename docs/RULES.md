@@ -20,7 +20,7 @@ Coding rules for this repository. `CLAUDE.md` imports this file; what the servic
 
 - Each API domain is one controller struct in `src/api/<domain>.rs` (`DefinitionController`, `SourceController`, ...). It holds the service traits it needs and has a `new(...)` constructor.
 - Handlers are associated functions on the controller. They take the controller as axum state, `State(this): State<Arc<Self>>`, and call `this.svc`. Do not write free handler functions, and do not take `State<SharedState>` in a handler.
-- A list handler takes `ApiQuery(mut page): ApiQuery<PageRequest>`, calls `page.normalize()` and `page.validate()`, and returns `ApiResponse<PageData<T>>`. The repository's `list_page(&PageRequest)` applies `LIMIT/OFFSET`, counts `total`, and builds `PageData::new(items, total, page)`. Do not return a bare `Vec<T>` from a list API, and do not hard-code page limits outside `PageRequest`.
+- A list handler takes `ApiQuery(page): ApiQuery<PageRequest>`, calls `page.validate()`, and returns `ApiResponse<PageData<T>>`. The repository's `list_page(&PageRequest)` applies `LIMIT/OFFSET`, counts `total`, and builds `PageData::new(items, total)`. Do not return a bare `Vec<T>` from a list API, and do not hard-code page limits outside `PageRequest`.
 - Handlers return only `ApiResponse` / `ApiResponse<T>`, never `AppResult<...>`. Convert an error with `err.to_response()`.
 - Re-export the controller from `src/api/mod.rs`, build it in `bootstrap/build.rs`, and store it in `AppState` as `Arc<XxxController>`.
 - Register routes in `src/api/routes.rs` with one function per controller that ends in `.with_state(controller)`, nested in `protected_routes()` unless the endpoint must be public like `/health`.
@@ -51,6 +51,7 @@ Coding rules for this repository. `CLAUDE.md` imports this file; what the servic
 
 - Validate values at the application boundary and when parsing persisted configuration.
 - Every request type has `normalize()` and `validate()`. Every handler, HTTP and gRPC, calls `payload.normalize()` first and `payload.validate()` second, and only then calls the service.
+- Exception: `PageRequest` has only `validate()`, no `normalize()`. Its fields are `u32` (nothing to trim or re-case), and `page()` / `size()` apply the defaults when a value is `0`. A list filter struct used next to it (`ApiQuery<XxxFilter>`) still has both.
 - `normalize()` trims strings and upper-cases codes and enum-like values (`code`, `status`, `level`, `format`, ...); it never fails. `validate()` checks the already-normalized values and returns `AppResult<()>` with `AppError::bad_request`; it does not trim or re-case.
 - Reject invalid HTTP header names and values before accepting the notification.
 

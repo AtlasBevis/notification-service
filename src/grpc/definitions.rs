@@ -72,11 +72,10 @@ impl Definitions for DefinitionGrpc {
         request: Request<PageRpcRequest>,
     ) -> Result<Response<DefinitionList>, Status> {
         let request = request.into_inner();
-        let mut page = PageRequest {
+        let page = PageRequest {
             page: request.page,
             size: request.size,
         };
-        page.normalize();
         page.validate().map_err(ProtoConvert::status)?;
 
         let data = self.svc.list(page).await.map_err(ProtoConvert::status)?;

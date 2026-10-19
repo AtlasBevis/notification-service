@@ -18,9 +18,8 @@ impl SourceController {
 
     pub async fn list_sources(
         State(this): State<Arc<Self>>,
-        ApiQuery(mut page): ApiQuery<PageRequest>,
+        ApiQuery(page): ApiQuery<PageRequest>,
     ) -> ApiResponse<PageData<SourceData>> {
-        page.normalize();
         if let Err(err) = page.validate() {
             return err.to_response();
         }

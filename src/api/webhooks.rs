@@ -18,9 +18,8 @@ impl WebhookController {
 
     pub async fn list_webhooks(
         State(this): State<Arc<Self>>,
-        ApiQuery(mut page): ApiQuery<PageRequest>,
+        ApiQuery(page): ApiQuery<PageRequest>,
     ) -> ApiResponse<PageData<WebhookData>> {
-        page.normalize();
         if let Err(err) = page.validate() {
             return err.to_response();
         }

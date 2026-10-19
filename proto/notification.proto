@@ -57,7 +57,7 @@ message PatchMetadataRequest {
 // /notification/sources
 // ---------------------------------------------------------------------------
 
-// Paging for every List* RPC. 0 / unset uses the default (page 1, size 20); size is at most 100.
+// Paging for every List* RPC. 0 / unset uses the default (page 1, size 10); size is at most 100.
 message PageRequest {
   uint32 page = 1;
   uint32 size = 2;

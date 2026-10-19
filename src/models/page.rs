@@ -14,17 +14,8 @@ impl PageRequest {
     pub const DEFAULT_SIZE: u32 = 10;
     pub const MAX_SIZE: u32 = 100;
 
-    pub fn normalize(&mut self) {
-        if self.page == 0 {
-            self.page = Self::DEFAULT_PAGE;
-        }
-        if self.size == 0 {
-            self.size = Self::DEFAULT_SIZE;
-        }
-    }
-
     pub fn validate(&self) -> AppResult<()> {
-        if self.size > Self::MAX_SIZE {
+        if self.size() > Self::MAX_SIZE {
             return Err(AppError::bad_request(format!(
                 "size must be between 1 and {}",
                 Self::MAX_SIZE
@@ -33,14 +24,30 @@ impl PageRequest {
         Ok(())
     }
 
+    pub fn page(&self) -> u32 {
+        if self.page == 0 {
+            Self::DEFAULT_PAGE
+        } else {
+            self.page
+        }
+    }
+
+    pub fn size(&self) -> u32 {
+        if self.size == 0 {
+            Self::DEFAULT_SIZE
+        } else {
+            self.size
+        }
+    }
+
     /// SQL `LIMIT`.
     pub fn limit(&self) -> i64 {
-        i64::from(self.size)
+        i64::from(self.size())
     }
 
     /// SQL `OFFSET`.
     pub fn offset(&self) -> i64 {
-        i64::from(self.page.saturating_sub(1)) * i64::from(self.size)
+        i64::from(self.page() - 1) * i64::from(self.size())
     }
 }
 

@@ -18,9 +18,8 @@ impl TargetController {
 
     pub async fn list_targets(
         State(this): State<Arc<Self>>,
-        ApiQuery(mut page): ApiQuery<PageRequest>,
+        ApiQuery(page): ApiQuery<PageRequest>,
     ) -> ApiResponse<PageData<TargetData>> {
-        page.normalize();
         if let Err(err) = page.validate() {
             return err.to_response();
         }
