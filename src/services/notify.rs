@@ -261,12 +261,7 @@ impl NotifyTrait for NotifyService {
 
         let topic = Config::load().kafka.topics.notify.clone();
         match kafka
-            .publish(
-                &topic,
-                &msg.key,
-                &msg.value,
-                &msg.value.source,
-            )
+            .publish(&topic, &msg.key, &msg.value, &msg.value.source)
             .await
         {
             Ok((partition, offset)) => {

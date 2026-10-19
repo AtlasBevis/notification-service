@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::models::{
-    ApiRequest, ApiResponse, CreateSourceRequest, PatchMetadataRequest, SourceData,
+    ApiRequest, ApiResponse, CreateSourceRequest, PageData, PatchMetadataRequest, SourceData,
 };
 use crate::services::SourceTrait;
 use axum::extract::{Path, State};
@@ -13,6 +13,13 @@ pub struct SourceController {
 impl SourceController {
     pub fn new(svc: Arc<dyn SourceTrait>) -> Self {
         Self { svc: svc }
+    }
+
+    pub async fn list_sources(State(this): State<Arc<Self>>) -> ApiResponse<PageData<SourceData>> {
+        match this.svc.list().await {
+            Ok(data) => ApiResponse::success(data),
+            Err(err) => err.to_response(),
+        }
     }
 
     pub async fn get_source(

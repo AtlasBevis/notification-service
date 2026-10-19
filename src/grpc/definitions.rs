@@ -73,7 +73,8 @@ impl Definitions for DefinitionGrpc {
     ) -> Result<Response<DefinitionList>, Status> {
         let data = self.svc.list().await.map_err(ProtoConvert::status)?;
         Ok(Response::new(DefinitionList {
-            items: data.into_iter().map(Self::to_reply).collect(),
+            total: data.total,
+            items: data.items.into_iter().map(Self::to_reply).collect(),
         }))
     }
 

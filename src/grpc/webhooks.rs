@@ -118,7 +118,8 @@ impl Webhooks for WebhookGrpc {
     async fn list_webhooks(&self, _request: Request<()>) -> Result<Response<WebhookList>, Status> {
         let data = self.svc.list().await.map_err(ProtoConvert::status)?;
         Ok(Response::new(WebhookList {
-            items: data.into_iter().map(Self::to_reply).collect(),
+            total: data.total,
+            items: data.items.into_iter().map(Self::to_reply).collect(),
         }))
     }
 

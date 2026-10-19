@@ -19,6 +19,23 @@ impl TargetsRepository {
         Self { pool }
     }
 
+    pub async fn list(&self) -> AppResult<Vec<TargetData>> {
+        let client = self.pool.get().await?;
+        let rows = client
+            .query(
+                r#"
+                SELECT t.id, t.code, c.code AS channel_code, t.name, t.status,
+                       t.metadata, t.created_at, t.updated_at
+                FROM targets t
+                JOIN channels c ON c.id = t.channel_id
+                ORDER BY t.code
+                "#,
+                &[],
+            )
+            .await?;
+        rows.iter().map(TargetData::map_row).collect()
+    }
+
     pub async fn find_by_code(&self, code: &str) -> AppResult<TargetData> {
         let client = self.pool.get().await?;
         let row = client

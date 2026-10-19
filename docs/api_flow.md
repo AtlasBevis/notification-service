@@ -142,9 +142,11 @@ For `TOKEN_ENDPOINT`, set `auth_mode = 'TOKEN_ENDPOINT'`, provide `token_url`, `
 | HTTP route | gRPC method |
 |---|---|
 | `POST /noti/notify` | `notification.v1.Notification/Notify` |
+| `GET /sources` | `notification.v1.Sources/ListSources` |
 | `GET /sources/{code}` | `notification.v1.Sources/GetSource` |
 | `POST /sources` | `notification.v1.Sources/CreateSource` |
 | `PATCH /sources/metadata` | `notification.v1.Sources/PatchSourceMetadata` |
+| `GET /targets` | `notification.v1.Targets/ListTargets` |
 | `GET /targets/{code}` | `notification.v1.Targets/GetTarget` |
 | `POST /targets` | `notification.v1.Targets/CreateTarget` |
 | `PATCH /targets/metadata` | `notification.v1.Targets/PatchTargetMetadata` |
@@ -202,9 +204,11 @@ Webhook method and timeout come from `webhook_configs`. Each webhook delivery ca
 |---|---|---|
 | `GET` | `/health` | Public health check |
 | `POST` | `/notification/noti/notify` | Validate, accept, and dispatch a notification |
+| `GET` | `/notification/sources` | List sources |
 | `POST` | `/notification/sources` | Create a source |
 | `GET` | `/notification/sources/{code}` | Read a source |
 | `PATCH` | `/notification/sources/metadata` | Update source metadata |
+| `GET` | `/notification/targets` | List targets |
 | `POST` | `/notification/targets` | Create a target |
 | `GET` | `/notification/targets/{code}` | Read a target |
 | `PATCH` | `/notification/targets/metadata` | Update target metadata |
@@ -219,5 +223,13 @@ Webhook method and timeout come from `webhook_configs`. Each webhook delivery ca
 | `GET` | `/notification/webhooks/{target_code}` | Read a webhook config |
 | `PUT` | `/notification/webhooks/{target_code}` | Replace a webhook config and its auth config |
 | `DELETE` | `/notification/webhooks/{target_code}` | Delete a webhook config and its auth config |
+
+Every list route (`GET /sources`, `/targets`, `/definitions`, `/webhooks`) returns all rows ordered by `code` as a `PageData` (`src/models/page.rs`) in `data`:
+
+```json
+{ "items": [ ... ], "total": 2 }
+```
+
+The matching gRPC `*List` messages carry the same `items` and `total`.
 
 All `/notification` routes require `api-key` authentication. Notification CRUD routes are not provided.

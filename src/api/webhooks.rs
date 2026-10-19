@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::models::{ApiRequest, ApiResponse, SaveWebhookRequest, WebhookData};
+use crate::models::{ApiRequest, ApiResponse, PageData, SaveWebhookRequest, WebhookData};
 use crate::services::WebhookServiceTrait;
 use axum::extract::{Path, State};
 
@@ -14,7 +14,9 @@ impl WebhookController {
         Self { svc: svc }
     }
 
-    pub async fn list_webhooks(State(this): State<Arc<Self>>) -> ApiResponse<Vec<WebhookData>> {
+    pub async fn list_webhooks(
+        State(this): State<Arc<Self>>,
+    ) -> ApiResponse<PageData<WebhookData>> {
         match this.svc.list().await {
             Ok(data) => ApiResponse::success(data),
             Err(err) => err.to_response(),

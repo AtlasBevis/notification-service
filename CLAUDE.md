@@ -68,9 +68,11 @@ src/
 |---|---|---|
 | `GET` | `/health` | Public |
 | `POST` | `/notification/noti/notify` | `api-key` |
+| `GET` | `/notification/sources` | `api-key` |
 | `GET` | `/notification/sources/{code}` | `api-key` |
 | `POST` | `/notification/sources` | `api-key` |
 | `PATCH` | `/notification/sources/metadata` | `api-key` |
+| `GET` | `/notification/targets` | `api-key` |
 | `GET` | `/notification/targets/{code}` | `api-key` |
 | `POST` | `/notification/targets` | `api-key` |
 | `PATCH` | `/notification/targets/metadata` | `api-key` |
@@ -88,6 +90,7 @@ src/
 
 - The `/notification` prefix is `server.base_path` in config; `/health` is always at the root.
 - Protected routes use the `api-key` header.
+- List routes (`GET /sources`, `/targets`, `/definitions`, `/webhooks`) return `PageData { items, total }` (`src/models/page.rs`); their services return `AppResult<PageData<T>>`, and the gRPC `*List` messages have `items` and `total`.
 - There are no create/list/get/update/delete routes for notifications themselves.
 - gRPC on `server.grpc.port` (metadata `api-key`): `notification.v1.Notification/Notify` plus `Sources`, `Targets`, `Templates`, `Definitions`, `Webhooks`, one method per route above.
 

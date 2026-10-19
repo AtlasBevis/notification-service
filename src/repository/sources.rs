@@ -23,6 +23,7 @@ impl SourceRepository {
                 r#"
                 SELECT id, code, name, status, metadata, created_at, updated_at
                 FROM sources
+                ORDER BY code
                 "#,
                 &[],
             )

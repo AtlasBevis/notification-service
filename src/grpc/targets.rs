@@ -6,7 +6,7 @@ use super::convert::ProtoConvert;
 use super::pb::targets_server::Targets;
 use super::pb::{
     CodeRequest, CreateTargetRequest as CreateTargetRpcRequest,
-    PatchMetadataRequest as PatchMetadataRpcRequest, Target,
+    PatchMetadataRequest as PatchMetadataRpcRequest, Target, TargetList,
 };
 use crate::models::{CreateTargetRequest, PatchMetadataRequest, TargetData};
 use crate::services::TargetTrait;
@@ -37,6 +37,14 @@ impl TargetGrpc {
 
 #[tonic::async_trait]
 impl Targets for TargetGrpc {
+    async fn list_targets(&self, _request: Request<()>) -> Result<Response<TargetList>, Status> {
+        let data = self.svc.list().await.map_err(ProtoConvert::status)?;
+        Ok(Response::new(TargetList {
+            total: data.total,
+            items: data.items.into_iter().map(Self::to_reply).collect(),
+        }))
+    }
+
     async fn get_target(&self, request: Request<CodeRequest>) -> Result<Response<Target>, Status> {
         let key =
             ProtoConvert::code(&request.into_inner().code, "code").map_err(ProtoConvert::status)?;

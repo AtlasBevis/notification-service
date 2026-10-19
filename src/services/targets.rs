@@ -2,12 +2,13 @@ use async_trait::async_trait;
 
 use crate::enums::Status;
 use crate::error::{AppError, AppResult};
-use crate::models::{CreateTargetRequest, PatchMetadataRequest, TargetData};
+use crate::models::{CreateTargetRequest, PageData, PatchMetadataRequest, TargetData};
 use crate::repository::TargetsRepository;
 
 /// Targets are always read from Postgres; they are not cached in memory.
 #[async_trait]
 pub trait TargetTrait: Send + Sync {
+    async fn list(&self) -> AppResult<PageData<TargetData>>;
     async fn get_by_code(&self, code: &str) -> AppResult<TargetData>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData>;
     async fn create(&self, req: CreateTargetRequest) -> AppResult<()>;
@@ -27,6 +28,10 @@ impl TargetsService {
 
 #[async_trait]
 impl TargetTrait for TargetsService {
+    async fn list(&self) -> AppResult<PageData<TargetData>> {
+        Ok(PageData::new(self.repo.list().await?))
+    }
+
     async fn get_by_code(&self, code: &str) -> AppResult<TargetData> {
         let key = code.trim().to_ascii_uppercase();
         self.repo.find_by_code(&key).await

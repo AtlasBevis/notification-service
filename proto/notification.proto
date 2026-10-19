@@ -58,9 +58,15 @@ message PatchMetadataRequest {
 // ---------------------------------------------------------------------------
 
 service Sources {
+  rpc ListSources(google.protobuf.Empty) returns (SourceList);
   rpc GetSource(CodeRequest) returns (Source);
   rpc CreateSource(CreateSourceRequest) returns (google.protobuf.Empty);
   rpc PatchSourceMetadata(PatchMetadataRequest) returns (google.protobuf.Empty);
+}
+
+message SourceList {
+  repeated Source items = 1;
+  int64 total = 2;
 }
 
 message Source {
@@ -84,9 +90,15 @@ message CreateSourceRequest {
 // ---------------------------------------------------------------------------
 
 service Targets {
+  rpc ListTargets(google.protobuf.Empty) returns (TargetList);
   rpc GetTarget(CodeRequest) returns (Target);
   rpc CreateTarget(CreateTargetRequest) returns (google.protobuf.Empty);
   rpc PatchTargetMetadata(PatchMetadataRequest) returns (google.protobuf.Empty);
+}
+
+message TargetList {
+  repeated Target items = 1;
+  int64 total = 2;
 }
 
 message Target {
@@ -173,6 +185,7 @@ message DefinitionTarget {
 
 message DefinitionList {
   repeated Definition items = 1;
+  int64 total = 2;
 }
 
 message SaveDefinitionRequest {
@@ -239,6 +252,7 @@ message WebhookAuth {
 
 message WebhookList {
   repeated Webhook items = 1;
+  int64 total = 2;
 }
 
 // Omitted optional fields take the same defaults as the HTTP body.

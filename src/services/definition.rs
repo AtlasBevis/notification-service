@@ -1,6 +1,6 @@
 use crate::enums::{Channel, Status};
 use crate::error::{AppError, AppResult};
-use crate::models::{DefinitionData, DefinitionTarget, SaveDefinitionRequest};
+use crate::models::{DefinitionData, DefinitionTarget, PageData, SaveDefinitionRequest};
 use crate::repository::DefinitionRepository;
 use crate::services::{ChannelTrait, SourceTrait, TargetTrait, TemplateTrait};
 use async_trait::async_trait;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 pub trait DefinitionTrait: Send + Sync {
     async fn get_by_code(&self, code: &str) -> AppResult<DefinitionData>;
     async fn get_active_by_code(&self, code: &str) -> AppResult<DefinitionData>;
-    async fn list(&self) -> AppResult<Vec<DefinitionData>>;
+    async fn list(&self) -> AppResult<PageData<DefinitionData>>;
     async fn create(&self, req: SaveDefinitionRequest) -> AppResult<DefinitionData>;
     async fn update(&self, req: SaveDefinitionRequest) -> AppResult<DefinitionData>;
     async fn delete(&self, code: &str) -> AppResult<()>;
@@ -140,9 +140,9 @@ impl DefinitionTrait for DefinitionService {
         Ok(d)
     }
 
-    async fn list(&self) -> AppResult<Vec<DefinitionData>> {
+    async fn list(&self) -> AppResult<PageData<DefinitionData>> {
         match self.repo.list().await {
-            Ok(rows) => Ok(rows),
+            Ok(rows) => Ok(PageData::new(rows)),
             Err(err) => {
                 tracing::error!(error = %err, "list definitions failed");
                 Err(err)

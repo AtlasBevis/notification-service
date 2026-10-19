@@ -4,6 +4,7 @@ mod delivery;
 mod notification;
 mod notify_msg;
 mod notify_request;
+mod page;
 mod source;
 mod target;
 mod template;
@@ -21,6 +22,7 @@ pub use definition::{
 pub use notification::{AcceptedNotification, DeliveryDraft};
 pub use notify_msg::{NotifyMessage, NotifyValue, TargetPayload};
 pub use notify_request::NotifyRequest;
+pub use page::PageData;
 pub use source::{CreateSourceRequest, PatchMetadataRequest, SourceData};
 pub use target::{CreateTargetRequest, Recipients, TargetData};
 pub use template::{SaveTemplateRequest, TemplateData};

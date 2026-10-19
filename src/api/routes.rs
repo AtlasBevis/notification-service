@@ -70,7 +70,10 @@ fn noti_routes(controller: Arc<NotifyController>) -> Router {
 
 fn source_routes(controller: Arc<SourceController>) -> Router {
     Router::new()
-        .route("/", post(SourceController::create_source))
+        .route(
+            "/",
+            get(SourceController::list_sources).post(SourceController::create_source),
+        )
         .route("/metadata", patch(SourceController::patch_metadata))
         .route("/:code", get(SourceController::get_source))
         .with_state(controller)
@@ -78,7 +81,10 @@ fn source_routes(controller: Arc<SourceController>) -> Router {
 
 fn target_routes(controller: Arc<TargetController>) -> Router {
     Router::new()
-        .route("/", post(TargetController::create_target))
+        .route(
+            "/",
+            get(TargetController::list_targets).post(TargetController::create_target),
+        )
         .route("/metadata", patch(TargetController::patch_metadata))
         .route("/:code", get(TargetController::get_target))
         .with_state(controller)
