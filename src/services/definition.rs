@@ -64,9 +64,19 @@ impl DefinitionService {
             }
             Err(err) => return Err(err),
         };
-        let channel = self.channels.get(&req.channel_code).await.ok_or_else(|| {
+        let code = Channel::parse(&req.channel_code).ok_or_else(|| {
             AppError::bad_request(format!("unknown channel `{}`", req.channel_code))
         })?;
+        let channel = match self.channels.get_by_code(&code).await {
+            Ok(channel) => channel,
+            Err(AppError::NotFound(_)) => {
+                return Err(AppError::bad_request(format!(
+                    "unknown channel `{}`",
+                    req.channel_code
+                )))
+            }
+            Err(err) => return Err(err),
+        };
         let is_webhook = channel.code == Channel::WEBHOOK;
 
         let mut targets = Vec::with_capacity(req.targets.len());
@@ -81,7 +91,7 @@ impl DefinitionService {
                 }
                 Err(err) => return Err(err),
             };
-            if target.channel_code != channel.code {
+            if target.channel != channel.code {
                 return Err(AppError::bad_request(format!(
                     "target `{}` does not belong to channel `{}`",
                     target.code, channel.code

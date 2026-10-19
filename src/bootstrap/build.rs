@@ -2,7 +2,7 @@ use crate::api::{
     DefinitionController, HealthController, NotifyController, SourceController, TargetController,
     TemplateController, WebhookController,
 };
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use std::sync::Arc;
 
 use crate::config::Config;
@@ -14,12 +14,10 @@ use crate::repository::{
 };
 use crate::services::{
     ChannelService, ConsumerService, ConsumerTrait, DefinitionService, DeliveryService,
-    EmailService, MSService, NotificationService, NotifyService, SourceService, TargetsService,
+    EmailService, MSService, NotificationService, NotifyService, SourceService, TargetService,
     TemplateService, WebhookService,
 };
 use crate::state::{AppState, SharedState};
-
-use super::load::load_memory;
 
 /// Wire repositories and services into the shared `AppState`, used by both the API and `notification-job`.
 pub async fn build_state(config: &Config) -> AppResult<SharedState> {
@@ -36,9 +34,20 @@ pub async fn build_state(config: &Config) -> AppResult<SharedState> {
     let definitions_repo = DefinitionRepository::new(pool.clone());
 
     // services
-    let channels_service = Arc::new(ChannelService::new(channels_repo.clone()));
-    let sources_service = Arc::new(SourceService::new(sources_repo.clone()));
-    let targets_service = Arc::new(TargetsService::new(targets_repo.clone()));
+    let channels_service = Arc::new(
+        ChannelService::new(channels_repo.clone())
+            .await
+            .map_err(|e| AppError::internal_with("Failed to load channels", e))?,
+    );
+    let sources_service = Arc::new(
+        SourceService::new(sources_repo.clone())
+            .await
+            .map_err(|e| AppError::internal_with("Failed to load sources", e))?,
+    );
+    let targets_service = Arc::new(TargetService::new(
+        targets_repo.clone(),
+        channels_service.clone(),
+    ));
     let templates_service = Arc::new(TemplateService::new(templates_repo));
     let definitions_service = Arc::new(DefinitionService::new(
         definitions_repo,
@@ -58,8 +67,6 @@ pub async fn build_state(config: &Config) -> AppResult<SharedState> {
         channels_service.clone(),
         targets_service.clone(),
     ));
-
-    load_memory(channels_service.as_ref(), sources_service.as_ref()).await?;
 
     let notification_service = Arc::new(NotificationService::new(notifications_repo));
     let delivery_service = Arc::new(DeliveryService::new(deliveries_repo));

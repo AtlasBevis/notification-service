@@ -5,19 +5,17 @@ use tokio::sync::RwLock;
 
 use crate::enums::Status;
 use crate::error::{AppError, AppResult};
-use crate::models::{CreateSourceRequest, PageData, PageRequest, PatchMetadataRequest, SourceData};
+use crate::models::{PageData, PageRequest, SourceData, SourceRequest};
 use crate::repository::SourceRepository;
 
 #[async_trait]
 pub trait SourceTrait: Send + Sync {
-    async fn load(&self) -> AppResult<()>;
     async fn list(&self, page: PageRequest) -> AppResult<PageData<SourceData>>;
-    async fn get(&self, code: &str) -> Option<SourceData>;
     async fn get_by_code(&self, code: &str) -> AppResult<SourceData>;
     async fn get_active_by_code(&self, code: &str) -> AppResult<SourceData>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<SourceData>;
-    async fn create(&self, req: CreateSourceRequest) -> AppResult<()>;
-    async fn patch_metadata(&self, req: PatchMetadataRequest) -> AppResult<()>;
+    async fn create(&self, req: SourceRequest) -> AppResult<()>;
+    async fn update(&self, req: SourceRequest) -> AppResult<()>;
 }
 
 #[derive(Clone)]
@@ -27,46 +25,40 @@ pub struct SourceService {
 }
 
 impl SourceService {
-    pub fn new(repo: SourceRepository) -> Self {
-        Self {
-            repo,
-            cache: Arc::new(RwLock::new(HashMap::new())),
-        }
-    }
-}
-
-#[async_trait]
-impl SourceTrait for SourceService {
-    async fn load(&self) -> AppResult<()> {
-        let rows = self.repo.list().await?;
+    /// Loads every source into the memory cache before returning.
+    pub async fn new(repo: SourceRepository) -> AppResult<Self> {
+        let rows = repo.list().await?;
 
         let mut map = HashMap::new();
         for row in rows {
             map.insert(row.code.clone(), row);
         }
 
-        *self.cache.write().await = map;
-        Ok(())
+        Ok(Self {
+            repo,
+            cache: Arc::new(RwLock::new(map)),
+        })
     }
 
+    async fn get(&self, code: &str) -> Option<SourceData> {
+        self.cache.read().await.get(code).cloned()
+    }
+}
+
+#[async_trait]
+impl SourceTrait for SourceService {
     async fn list(&self, page: PageRequest) -> AppResult<PageData<SourceData>> {
         self.repo.list_page(&page).await
     }
 
-    async fn get(&self, code: &str) -> Option<SourceData> {
-        let key = code.trim().to_ascii_uppercase();
-        self.cache.read().await.get(&key).cloned()
-    }
-
     async fn get_by_code(&self, code: &str) -> AppResult<SourceData> {
-        let key = code.trim().to_ascii_uppercase();
-        if let Some(s) = self.get(&key).await {
+        if let Some(s) = self.get(code).await {
             return Ok(s);
         }
 
-        match self.repo.find_by_code(&key).await {
+        match self.repo.find_by_code(code).await {
             Ok(s) => {
-                self.cache.write().await.insert(key, s.clone());
+                self.cache.write().await.insert(code.to_owned(), s.clone());
                 Ok(s)
             }
             Err(err) => {
@@ -96,16 +88,16 @@ impl SourceTrait for SourceService {
         Ok(s)
     }
 
-    async fn create(&self, req: CreateSourceRequest) -> AppResult<()> {
-        match self.repo.insert(&req).await {
-            Ok(row) => {
-                self.cache.write().await.insert(req.code, row);
-                Ok(())
-            }
-            Err(AppError::Conflict(_)) => Err(AppError::conflict(format!(
+    async fn create(&self, req: SourceRequest) -> AppResult<()> {
+        if self.get_by_code(&req.code).await.is_ok() {
+            return Err(AppError::conflict(format!(
                 "source `{}` already exists",
-                req.code.trim()
-            ))),
+                req.code
+            )));
+        }
+
+        match self.repo.insert(&req).await {
+            Ok(_) => Ok(()),
             Err(err) => {
                 tracing::error!(error = %err, code = %req.code, "insert source failed");
                 Err(err)
@@ -113,8 +105,8 @@ impl SourceTrait for SourceService {
         }
     }
 
-    async fn patch_metadata(&self, req: PatchMetadataRequest) -> AppResult<()> {
-        match self.repo.patch_metadata(&req.code, &req.metadata).await {
+    async fn update(&self, req: SourceRequest) -> AppResult<()> {
+        match self.repo.update(&req).await {
             Ok(()) => {
                 self.cache.write().await.remove(&req.code);
                 Ok(())
@@ -124,7 +116,7 @@ impl SourceTrait for SourceService {
                 req.code
             ))),
             Err(err) => {
-                tracing::error!(error = %err, code = %req.code, "patch source metadata failed");
+                tracing::error!(error = %err, code = %req.code, "update source failed");
                 Err(err)
             }
         }

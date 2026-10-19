@@ -5,10 +5,10 @@ use tonic::{Request, Response, Status};
 use super::convert::ProtoConvert;
 use super::pb::sources_server::Sources;
 use super::pb::{
-    CodeRequest, CreateSourceRequest as CreateSourceRpcRequest, PageRequest as PageRpcRequest,
-    PatchMetadataRequest as PatchMetadataRpcRequest, Source, SourceList,
+    CodeRequest, PageRequest as PageRpcRequest, Source, SourceList,
+    SourceRequest as SourceRpcRequest,
 };
-use crate::models::{CreateSourceRequest, PageRequest, PatchMetadataRequest, SourceData};
+use crate::models::{PageRequest, SourceData, SourceRequest};
 use crate::services::SourceTrait;
 
 /// gRPC counterpart of `SourceController`.
@@ -19,6 +19,14 @@ pub struct SourceGrpc {
 impl SourceGrpc {
     pub fn new(svc: Arc<dyn SourceTrait>) -> Self {
         Self { svc }
+    }
+
+    fn to_request(request: SourceRpcRequest) -> SourceRequest {
+        SourceRequest {
+            code: request.code,
+            name: request.name,
+            metadata: ProtoConvert::map(request.metadata),
+        }
     }
 
     fn to_reply(data: SourceData) -> Source {
@@ -67,16 +75,11 @@ impl Sources for SourceGrpc {
 
     async fn create_source(
         &self,
-        request: Request<CreateSourceRpcRequest>,
+        request: Request<SourceRpcRequest>,
     ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-        let mut payload = CreateSourceRequest {
-            code: request.code,
-            name: request.name,
-            metadata: ProtoConvert::map(request.metadata),
-        };
+        let mut payload = Self::to_request(request.into_inner());
         payload.normalize();
-        payload.validate().map_err(ProtoConvert::status)?;
+        payload.validate(true).map_err(ProtoConvert::status)?;
 
         self.svc
             .create(payload)
@@ -85,20 +88,16 @@ impl Sources for SourceGrpc {
         Ok(Response::new(()))
     }
 
-    async fn patch_source_metadata(
+    async fn update_source(
         &self,
-        request: Request<PatchMetadataRpcRequest>,
+        request: Request<SourceRpcRequest>,
     ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-        let mut payload = PatchMetadataRequest {
-            code: request.code,
-            metadata: ProtoConvert::map(request.metadata),
-        };
+        let mut payload = Self::to_request(request.into_inner());
         payload.normalize();
-        payload.validate().map_err(ProtoConvert::status)?;
+        payload.validate(false).map_err(ProtoConvert::status)?;
 
         self.svc
-            .patch_metadata(payload)
+            .update(payload)
             .await
             .map_err(ProtoConvert::status)?;
         Ok(Response::new(()))

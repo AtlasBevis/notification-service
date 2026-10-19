@@ -4,7 +4,7 @@ pub const EMAIL: &str = "EMAIL";
 pub const WEBHOOK: &str = "WEBHOOK";
 pub const MSTEAMS: &str = "MSTEAMS";
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Channel {
     MSTEAMS,

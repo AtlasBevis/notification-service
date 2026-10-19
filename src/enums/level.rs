@@ -5,7 +5,7 @@ pub const ERROR: &str = "ERROR";
 pub const WARN: &str = "WARN";
 pub const CRITICAL: &str = "CRITICAL";
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Level {
     Info,

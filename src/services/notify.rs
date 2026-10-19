@@ -194,7 +194,7 @@ impl NotifyTrait for NotifyService {
                 .targets
                 .get_active_by_id(definition_target.target_id)
                 .await?;
-            if target.channel_code != channel.code {
+            if target.channel != channel.code {
                 return Err(AppError::bad_request(format!(
                     "target `{}` does not belong to channel `{}`",
                     target.code, channel.code

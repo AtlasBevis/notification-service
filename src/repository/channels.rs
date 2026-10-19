@@ -1,5 +1,6 @@
 use deadpool_postgres::Pool;
 
+use crate::enums::Channel;
 use crate::models::ChannelData;
 
 use crate::error::{AppError, AppResult};
@@ -28,9 +29,8 @@ impl ChannelRepository {
         rows.iter().map(ChannelData::map_row).collect()
     }
 
-    pub async fn find_by_code(&self, code: &str) -> AppResult<ChannelData> {
+    pub async fn find_by_code(&self, code: Channel) -> AppResult<ChannelData> {
         let client = self.pool.get().await?;
-        let key = code.trim().to_ascii_uppercase();
         let row = client
             .query_opt(
                 r#"
@@ -38,10 +38,10 @@ impl ChannelRepository {
                 FROM channels
                 WHERE code = $1
                 "#,
-                &[&key],
+                &[&code.as_str()],
             )
             .await?;
-        let row = row.ok_or_else(|| AppError::not_found(format!("unknown channel `{key}`")))?;
+        let row = row.ok_or_else(|| AppError::not_found(format!("unknown channel `{code}`")))?;
         ChannelData::map_row(&row)
     }
 

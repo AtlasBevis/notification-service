@@ -1,11 +1,10 @@
-use crate::models::{PageData, PageRequest};
+use crate::models::{PageData, PageRequest, SourceRequest};
 use crate::utils::TimeUtils;
 use deadpool_postgres::Pool;
 use serde_json::Value;
 
-use crate::enums::Status;
 use crate::error::{AppError, AppResult};
-use crate::models::{CreateSourceRequest, SourceData};
+use crate::models::SourceData;
 
 #[derive(Clone)]
 pub struct SourceRepository {
@@ -49,7 +48,7 @@ impl SourceRepository {
                 r#"
                 SELECT id, code, name, status, metadata, created_at, updated_at
                 FROM sources
-                ORDER BY code
+                ORDER BY updated_at, created_at
                 LIMIT $1
                 OFFSET $2
                 "#,
@@ -99,49 +98,47 @@ impl SourceRepository {
         }
     }
 
-    pub async fn insert(&self, req: &CreateSourceRequest) -> AppResult<SourceData> {
+    pub async fn insert(&self, req: &SourceRequest) -> AppResult<i32> {
         let client = self.pool.get().await?;
-
         let row = client
             .query_one(
                 r#"
-                INSERT INTO sources (code, name, status, metadata, updated_at)
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING id, code, name, status, metadata, created_at, updated_at
+                INSERT INTO sources (code, name, metadata)
+                VALUES ($1, $2, $3)
+                RETURNING id
+                "#,
+                &[&req.code, &req.name, &Value::Object(req.metadata.clone())],
+            )
+            .await?;
+        Ok(row.get("id"))
+    }
+
+    /// An empty `name` keeps the stored name; `metadata` replaces the stored value.
+    pub async fn update(&self, req: &SourceRequest) -> AppResult<()> {
+        let client = self.pool.get().await?;
+        let n = client
+            .execute(
+                r#"
+                UPDATE sources
+                SET name = $2,
+                    metadata = $3,
+                    updated_at = $4
+                WHERE code = $1
                 "#,
                 &[
                     &req.code,
                     &req.name,
-                    &Status::Active.as_str(),
                     &Value::Object(req.metadata.clone()),
                     &TimeUtils::now(),
                 ],
             )
             .await?;
-        SourceData::map_row(&row)
-    }
-
-    pub async fn patch_metadata(
-        &self,
-        code: &str,
-        metadata: &serde_json::Map<String, Value>,
-    ) -> AppResult<()> {
-        let client = self.pool.get().await?;
-
-        let n = client
-            .execute(
-                r#"
-                UPDATE sources
-                SET metadata = $2,
-                    updated_at = $3
-                WHERE code = $1
-                "#,
-                &[&code, &Value::Object(metadata.clone()), &TimeUtils::now()],
-            )
-            .await?;
 
         if n == 0 {
-            return Err(AppError::not_found("not found"));
+            return Err(AppError::not_found(format!(
+                "source `{}` not found",
+                req.code
+            )));
         }
         Ok(())
     }

@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use crate::models::{
-    ApiQuery, ApiRequest, ApiResponse, CreateTargetRequest, PageData, PageRequest,
-    PatchMetadataRequest, TargetData,
+    ApiQuery, ApiRequest, ApiResponse, PageData, PageRequest, TargetData, TargetRequest,
 };
 use crate::services::TargetTrait;
 use axum::extract::{Path, State};
@@ -47,10 +46,10 @@ impl TargetController {
 
     pub async fn create_target(
         State(this): State<Arc<Self>>,
-        ApiRequest(mut payload): ApiRequest<CreateTargetRequest>,
+        ApiRequest(mut payload): ApiRequest<TargetRequest>,
     ) -> ApiResponse {
         payload.normalize();
-        if let Err(err) = payload.validate() {
+        if let Err(err) = payload.validate(true) {
             return err.to_response();
         }
 
@@ -60,16 +59,16 @@ impl TargetController {
         }
     }
 
-    pub async fn patch_metadata(
+    pub async fn update_target(
         State(this): State<Arc<Self>>,
-        ApiRequest(mut payload): ApiRequest<PatchMetadataRequest>,
+        ApiRequest(mut payload): ApiRequest<TargetRequest>,
     ) -> ApiResponse {
         payload.normalize();
-        if let Err(err) = payload.validate() {
+        if let Err(err) = payload.validate(false) {
             return err.to_response();
         }
 
-        match this.svc.patch_metadata(payload).await {
+        match this.svc.update(payload).await {
             Ok(()) => ApiResponse::ok(),
             Err(err) => err.to_response(),
         }

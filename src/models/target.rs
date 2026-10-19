@@ -10,7 +10,7 @@ use crate::utils::JsonUtils;
 pub struct TargetData {
     pub id: i32,
     pub code: String,
-    pub channel_code: Channel,
+    pub channel: Channel,
     pub name: String,
     pub status: Status,
     pub metadata: Value,
@@ -20,13 +20,13 @@ pub struct TargetData {
 
 impl TargetData {
     pub fn map_row(row: &tokio_postgres::Row) -> AppResult<Self> {
-        let channel_code: String = row.get("channel_code");
+        let channel: String = row.get("channel");
         let status: String = row.get("status");
         Ok(Self {
             id: row.get("id"),
             code: row.get("code"),
-            channel_code: Channel::parse(&channel_code).ok_or_else(|| {
-                AppError::internal(format!("unknown channel `{channel_code}` in targets"))
+            channel: Channel::parse(&channel).ok_or_else(|| {
+                AppError::internal(format!("unknown channel `{channel}` in targets"))
             })?,
             name: row.get("name"),
             status: Status::parse(&status).ok_or_else(|| {
@@ -91,41 +91,36 @@ fn string_list(metadata: &Value, key: &str) -> Vec<String> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct CreateTargetRequest {
+pub struct TargetRequest {
     pub code: String,
-    pub channel_code: String,
+    pub channel: Channel,
     pub name: String,
-
-    #[serde(default)]
     pub metadata: Map<String, Value>,
 }
 
-impl CreateTargetRequest {
+impl TargetRequest {
     pub fn normalize(&mut self) {
         self.code = self.code.trim().to_ascii_uppercase();
-        self.channel_code = self.channel_code.trim().to_ascii_uppercase();
         self.name = self.name.trim().to_string();
     }
 
-    pub fn validate(&self) -> AppResult<()> {
+    pub fn validate(&self, is_create: bool) -> AppResult<()> {
         if self.code.is_empty() {
             return Err(AppError::bad_request("code is required"));
         }
+
         if !self
             .code
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
         {
-            return Err(AppError::bad_request(
-                "code must be alphanumeric, '_' or '-'",
-            ));
+            return Err(AppError::bad_request("code must be alphanumeric, '_'"));
         }
-        if self.channel_code.is_empty() {
-            return Err(AppError::bad_request("channel_code is required"));
-        }
-        if self.name.is_empty() {
+
+        if is_create && self.name.is_empty() {
             return Err(AppError::bad_request("name is required"));
         }
+
         Ok(())
     }
 }

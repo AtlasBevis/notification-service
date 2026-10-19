@@ -34,7 +34,7 @@ impl SourceData {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct CreateSourceRequest {
+pub struct SourceRequest {
     pub code: String,
 
     pub name: String,
@@ -43,51 +43,27 @@ pub struct CreateSourceRequest {
     pub metadata: Map<String, Value>,
 }
 
-impl CreateSourceRequest {
+impl SourceRequest {
     pub fn normalize(&mut self) {
         self.code = self.code.trim().to_ascii_uppercase();
         self.name = self.name.trim().to_string();
     }
 
-    pub fn validate(&self) -> AppResult<()> {
+    pub fn validate(&self, is_create: bool) -> AppResult<()> {
         if self.code.is_empty() {
             return Err(AppError::bad_request("code is required"));
         }
+
         if !self
             .code
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
         {
-            return Err(AppError::bad_request(
-                "code must be alphanumeric, '_' or '-'",
-            ));
+            return Err(AppError::bad_request("code must be alphanumeric, '_'"));
         }
-        if self.name.is_empty() {
+
+        if is_create && self.name.is_empty() {
             return Err(AppError::bad_request("name is required"));
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct PatchMetadataRequest {
-    pub code: String,
-
-    #[serde(default)]
-    pub metadata: Map<String, Value>,
-}
-
-impl PatchMetadataRequest {
-    pub fn normalize(&mut self) {
-        self.code = self.code.trim().to_ascii_uppercase();
-    }
-
-    pub fn validate(&self) -> AppResult<()> {
-        if self.code.is_empty() {
-            return Err(AppError::bad_request("code is required"));
-        }
-        if self.metadata.is_empty() {
-            return Err(AppError::bad_request("metadata must not be empty"));
         }
         Ok(())
     }

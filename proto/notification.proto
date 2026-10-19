@@ -47,12 +47,6 @@ message CodeRequest {
   string code = 1;
 }
 
-// Body of `PATCH .../metadata` for sources and targets.
-message PatchMetadataRequest {
-  string code = 1;
-  google.protobuf.Struct metadata = 2;
-}
-
 // ---------------------------------------------------------------------------
 // /notification/sources
 // ---------------------------------------------------------------------------
@@ -66,8 +60,9 @@ message PageRequest {
 service Sources {
   rpc ListSources(PageRequest) returns (SourceList);
   rpc GetSource(CodeRequest) returns (Source);
-  rpc CreateSource(CreateSourceRequest) returns (google.protobuf.Empty);
-  rpc PatchSourceMetadata(PatchMetadataRequest) returns (google.protobuf.Empty);
+  rpc CreateSource(SourceRequest) returns (google.protobuf.Empty);
+  // `code` selects the source; an empty `name` keeps the stored name.
+  rpc UpdateSource(SourceRequest) returns (google.protobuf.Empty);
 }
 
 message SourceList {
@@ -85,7 +80,7 @@ message Source {
   google.protobuf.Timestamp updated_at = 7;
 }
 
-message CreateSourceRequest {
+message SourceRequest {
   string code = 1;
   string name = 2;
   google.protobuf.Struct metadata = 3;
@@ -98,8 +93,9 @@ message CreateSourceRequest {
 service Targets {
   rpc ListTargets(PageRequest) returns (TargetList);
   rpc GetTarget(CodeRequest) returns (Target);
-  rpc CreateTarget(CreateTargetRequest) returns (google.protobuf.Empty);
-  rpc PatchTargetMetadata(PatchMetadataRequest) returns (google.protobuf.Empty);
+  rpc CreateTarget(TargetRequest) returns (google.protobuf.Empty);
+  // `code` selects the target; `channel_code` is ignored (the channel never changes).
+  rpc UpdateTarget(TargetRequest) returns (google.protobuf.Empty);
 }
 
 message TargetList {
@@ -118,7 +114,7 @@ message Target {
   google.protobuf.Timestamp updated_at = 8;
 }
 
-message CreateTargetRequest {
+message TargetRequest {
   string code = 1;
   string channel_code = 2;
   string name = 3;

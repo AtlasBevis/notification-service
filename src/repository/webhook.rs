@@ -105,7 +105,7 @@ impl WebhookRepository {
         WebhookAuthConfig::map_row(&row)
     }
 
-    /// All webhook configs with their auth config, ordered by target code.
+    /// All webhook configs with their auth config, ordered by `updated_at, created_at`.
     pub async fn list_page(&self, page: &PageRequest) -> AppResult<PageData<WebhookData>> {
         let client = self.pool.get().await?;
         let total: i64 = client
@@ -333,7 +333,7 @@ impl WebhookRepository {
                     ON a.webhook_config_id = w.id
                 WHERE $1::text IS NULL
                     OR t.code = $1
-                ORDER BY t.code
+                ORDER BY w.updated_at, w.created_at
                 LIMIT $2
                 OFFSET $3
                 "#,

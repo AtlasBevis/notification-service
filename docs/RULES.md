@@ -21,6 +21,9 @@ Coding rules for this repository. `CLAUDE.md` imports this file; what the servic
 - Each API domain is one controller struct in `src/api/<domain>.rs` (`DefinitionController`, `SourceController`, ...). It holds the service traits it needs and has a `new(...)` constructor.
 - Handlers are associated functions on the controller. They take the controller as axum state, `State(this): State<Arc<Self>>`, and call `this.svc`. Do not write free handler functions, and do not take `State<SharedState>` in a handler.
 - A list handler takes `ApiQuery(page): ApiQuery<PageRequest>`, calls `page.validate()`, and returns `ApiResponse<PageData<T>>`. The repository's `list_page(&PageRequest)` applies `LIMIT/OFFSET`, counts `total`, and builds `PageData::new(items, total)`. Do not return a bare `Vec<T>` from a list API, and do not hard-code page limits outside `PageRequest`.
+- `list_page` orders by `updated_at, created_at`.
+- List filters are a separate `XxxFilter` struct (`Option` fields, `normalize()` turns empty into `None`), read with a second `ApiQuery<XxxFilter>` next to `ApiQuery<PageRequest>`. Do not `#[serde(flatten)]` `PageRequest` into it: flattened query values arrive as strings and `u32` fails to parse.
+- Dynamic filters use static SQL with nullable parameters, `($1::text IS NULL OR col = $1)`, and the same `WHERE` in the `COUNT(*)` and the page query. Do not build SQL by string concatenation.
 - Handlers return only `ApiResponse` / `ApiResponse<T>`, never `AppResult<...>`. Convert an error with `err.to_response()`.
 - Re-export the controller from `src/api/mod.rs`, build it in `bootstrap/build.rs`, and store it in `AppState` as `Arc<XxxController>`.
 - Register routes in `src/api/routes.rs` with one function per controller that ends in `.with_state(controller)`, nested in `protected_routes()` unless the endpoint must be public like `/health`.

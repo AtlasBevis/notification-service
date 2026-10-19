@@ -95,7 +95,7 @@ impl DefinitionRepository {
                            WHERE dt.definition_id = d.id
                        ) AS targets
                 FROM definitions d
-                ORDER BY d.code
+                ORDER BY d.updated_at, d.created_at
                 LIMIT $1
                 OFFSET $2
                 "#,

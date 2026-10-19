@@ -24,7 +24,7 @@ The project builds two binaries:
 - A send fails when Kafka is not connected.
 - Internal callers can use gRPC instead: `notification.v1.Notification/Notify` (`proto/notification.proto`, served from `src/grpc/` on `server.grpc.port`). It runs the same flow and checks the `api-key` metadata entry.
 - Every other HTTP route also has a gRPC method in the same proto (`Sources`, `Targets`, `Templates`, `Definitions`, `Webhooks`); see `docs/api_flow.md` for the mapping.
-- Channels and sources are cached in memory at startup (`bootstrap/load.rs`). Targets are not cached; they are read from Postgres on every use.
+- Channels and sources are cached in memory at startup: `ChannelService::new` and `SourceService::new` load their cache before returning. Targets are not cached; they are read from Postgres on every use.
 
 ## Definitions and templates
 
@@ -57,7 +57,7 @@ src/
   repository/   PostgreSQL adapters
   infras/       PostgreSQL, Kafka, and HTTP clients
   state.rs      AppState (services and controllers); passed around as SharedState = Arc<AppState>
-  bootstrap/    build.rs wires repositories, services, and controllers; load.rs loads the channel and source memory caches; logging.rs sets up tracing
+  bootstrap/    build.rs wires repositories, services, and controllers; logging.rs sets up tracing
   main.rs       API binary (`data-notification`)
   bin/          notification_job.rs: Kafka worker binary (`notification-job`)
 ```
@@ -71,11 +71,11 @@ src/
 | `GET` | `/notification/sources` | `api-key` |
 | `GET` | `/notification/sources/{code}` | `api-key` |
 | `POST` | `/notification/sources` | `api-key` |
-| `PATCH` | `/notification/sources/metadata` | `api-key` |
+| `PUT` | `/notification/sources/{code}` | `api-key` |
 | `GET` | `/notification/targets` | `api-key` |
 | `GET` | `/notification/targets/{code}` | `api-key` |
 | `POST` | `/notification/targets` | `api-key` |
-| `PATCH` | `/notification/targets/metadata` | `api-key` |
+| `PUT` | `/notification/targets/{code}` | `api-key` |
 | `POST` | `/notification/templates` | `api-key` |
 | `GET` | `/notification/definitions` | `api-key` |
 | `POST` | `/notification/definitions` | `api-key` |

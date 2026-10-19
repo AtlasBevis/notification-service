@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::{
     enums::Status,
-    models::{CreateTargetRequest, TargetData},
+    models::{TargetData, TargetRequest},
 };
 
 use crate::error::{AppError, AppResult};
@@ -39,7 +39,7 @@ impl TargetsRepository {
                        t.metadata, t.created_at, t.updated_at
                 FROM targets t
                 JOIN channels c ON c.id = t.channel_id
-                ORDER BY t.code
+                ORDER BY t.updated_at, t.created_at
                 LIMIT $1
                 OFFSET $2
                 "#,
@@ -89,56 +89,53 @@ impl TargetsRepository {
         TargetData::map_row(&row)
     }
 
-    pub async fn insert(&self, req: &CreateTargetRequest) -> AppResult<TargetData> {
+    pub async fn insert(&self, req: &TargetRequest, channel_id: i32) -> AppResult<i32> {
         let client = self.pool.get().await?;
-
         let row = client
             .query_one(
                 r#"
-                WITH inserted AS (
-                    INSERT INTO targets (code, channel_id, name, status, metadata, updated_at)
-                    VALUES ($1, (SELECT id FROM channels WHERE code = $2), $3, $4, $5, $6)
-                    RETURNING id, code, channel_id, name, status, metadata, created_at, updated_at
-                )
-                SELECT i.id, i.code, c.code AS channel_code, i.name, i.status,
-                       i.metadata, i.created_at, i.updated_at
-                FROM inserted i
-                JOIN channels c ON c.id = i.channel_id
+                INSERT INTO targets (code, channel_id, name, status, metadata)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id
                 "#,
                 &[
                     &req.code,
-                    &req.channel_code,
+                    &channel_id,
                     &req.name,
                     &Status::Active.as_str(),
+                    &Value::Object(req.metadata.clone()),
+                ],
+            )
+            .await?;
+        Ok(row.get("id"))
+    }
+
+    /// The channel never changes; `name` and `metadata` replace the stored values.
+    pub async fn update(&self, req: &TargetRequest) -> AppResult<()> {
+        let client = self.pool.get().await?;
+        let n = client
+            .execute(
+                r#"
+                UPDATE targets
+                SET name = $2,
+                    metadata = $3,
+                    updated_at = $4
+                WHERE code = $1
+                "#,
+                &[
+                    &req.code,
+                    &req.name,
                     &Value::Object(req.metadata.clone()),
                     &TimeUtils::now(),
                 ],
             )
             .await?;
-        TargetData::map_row(&row)
-    }
-
-    pub async fn patch_metadata(
-        &self,
-        code: &str,
-        metadata: &serde_json::Map<String, Value>,
-    ) -> AppResult<()> {
-        let client = self.pool.get().await?;
-
-        let n = client
-            .execute(
-                r#"
-                UPDATE targets
-                SET metadata = $2,
-                    updated_at = $3
-                WHERE code = $1
-                "#,
-                &[&code, &Value::Object(metadata.clone()), &TimeUtils::now()],
-            )
-            .await?;
 
         if n == 0 {
-            return Err(AppError::not_found("not found"));
+            return Err(AppError::not_found(format!(
+                "target `{}` not found",
+                req.code
+            )));
         }
         Ok(())
     }

@@ -9,7 +9,7 @@ use crate::middlewares::{
 use crate::state::SharedState;
 use axum::{
     middleware,
-    routing::{get, patch, post},
+    routing::{get, post},
     Router,
 };
 use std::sync::Arc;
@@ -72,9 +72,10 @@ fn source_routes(controller: Arc<SourceController>) -> Router {
     Router::new()
         .route(
             "/",
-            get(SourceController::list_sources).post(SourceController::create_source),
+            get(SourceController::list_sources)
+                .post(SourceController::create_source)
+                .put(SourceController::update_source),
         )
-        .route("/metadata", patch(SourceController::patch_metadata))
         .route("/:code", get(SourceController::get_source))
         .with_state(controller)
 }
@@ -85,8 +86,10 @@ fn target_routes(controller: Arc<TargetController>) -> Router {
             "/",
             get(TargetController::list_targets).post(TargetController::create_target),
         )
-        .route("/metadata", patch(TargetController::patch_metadata))
-        .route("/:code", get(TargetController::get_target))
+        .route(
+            "/:code",
+            get(TargetController::get_target).put(TargetController::update_target),
+        )
         .with_state(controller)
 }
 

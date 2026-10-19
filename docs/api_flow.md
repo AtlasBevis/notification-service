@@ -44,7 +44,7 @@ Configuration endpoints are available under `/notification/sources`, `/notificat
 
 The request is rejected with **400 Bad Request** when the source, channel, a target, or a template is unknown, a target belongs to another channel, a target is listed twice, a template's format does not fit the channel (`JSON` for WEBHOOK only), or an EMAIL / MSTEAMS definition has no template on any target. A duplicate `code` returns **409 Conflict**.
 
-`GET /notification/definitions` lists all definitions ordered by `code`, `GET /notification/definitions/{code}` returns one, and `DELETE /notification/definitions/{code}` removes the definition and its target links. Notifications already accepted for it are kept.
+`GET /notification/definitions` lists definitions (paged, ordered by `updated_at, created_at`), `GET /notification/definitions/{code}` returns one, and `DELETE /notification/definitions/{code}` removes the definition and its target links. Notifications already accepted for it are kept.
 
 Each definition links to one or more targets through `definition_targets`. The template is selected by `definition_targets.template_id`; `definitions` has no template column. A WEBHOOK target with a `template_id` takes its request body from the latest `ACTIVE` version of that template, which must have `format = 'JSON'` and a JSON object as `content`. A WEBHOOK target without a `template_id` sends the request's `variables` object unchanged as its body. EMAIL and MSTEAMS require a template and render one title and body from the first target (in `definition_targets.id` order) that has one. Placeholders such as `{{date_key}}` are replaced from the request's `variables`; each target gets its own rendered request body. EMAIL merges recipients from selected targets, while MSTEAMS and WEBHOOK send separately to each selected target.
 
@@ -145,11 +145,11 @@ For `TOKEN_ENDPOINT`, set `auth_mode = 'TOKEN_ENDPOINT'`, provide `token_url`, `
 | `GET /sources` | `notification.v1.Sources/ListSources` |
 | `GET /sources/{code}` | `notification.v1.Sources/GetSource` |
 | `POST /sources` | `notification.v1.Sources/CreateSource` |
-| `PATCH /sources/metadata` | `notification.v1.Sources/PatchSourceMetadata` |
+| `PUT /sources/{code}` | `notification.v1.Sources/UpdateSource` (`code` in the message) |
 | `GET /targets` | `notification.v1.Targets/ListTargets` |
 | `GET /targets/{code}` | `notification.v1.Targets/GetTarget` |
 | `POST /targets` | `notification.v1.Targets/CreateTarget` |
-| `PATCH /targets/metadata` | `notification.v1.Targets/PatchTargetMetadata` |
+| `PUT /targets/{code}` | `notification.v1.Targets/UpdateTarget` (`code` in the message) |
 | `POST /templates` | `notification.v1.Templates/SaveTemplate` |
 | `GET /definitions` | `notification.v1.Definitions/ListDefinitions` |
 | `GET /definitions/{code}` | `notification.v1.Definitions/GetDefinition` |
@@ -207,11 +207,11 @@ Webhook method and timeout come from `webhook_configs`. Each webhook delivery ca
 | `GET` | `/notification/sources` | List sources |
 | `POST` | `/notification/sources` | Create a source |
 | `GET` | `/notification/sources/{code}` | Read a source |
-| `PATCH` | `/notification/sources/metadata` | Update source metadata |
+| `PUT` | `/notification/sources/{code}` | Update a source: an empty `name` keeps the stored name, `metadata` replaces the stored value |
 | `GET` | `/notification/targets` | List targets |
 | `POST` | `/notification/targets` | Create a target |
 | `GET` | `/notification/targets/{code}` | Read a target |
-| `PATCH` | `/notification/targets/metadata` | Update target metadata |
+| `PUT` | `/notification/targets/{code}` | Update a target: the channel never changes; `name` (required) and `metadata` replace the stored values |
 | `POST` | `/notification/templates` | Create a template version (creates the template on first use of `name`) |
 | `GET` | `/notification/definitions` | List definitions |
 | `POST` | `/notification/definitions` | Create a definition |
@@ -224,7 +224,7 @@ Webhook method and timeout come from `webhook_configs`. Each webhook delivery ca
 | `PUT` | `/notification/webhooks/{target_code}` | Replace a webhook config and its auth config |
 | `DELETE` | `/notification/webhooks/{target_code}` | Delete a webhook config and its auth config |
 
-Every list route (`GET /sources`, `/targets`, `/definitions`, `/webhooks`) is paged with `?page=&size=` (`PageRequest`, `src/models/page.rs`): `page` and `size` are unsigned (`u32`); missing or `0` takes the default (page 1, size 10), and `size` above 100 is `400`. Rows are ordered by `code`, and `data` is a `PageData`, where `total` is the row count before paging:
+Every list route (`GET /sources`, `/targets`, `/definitions`, `/webhooks`) is paged with `?page=&size=` (`PageRequest`, `src/models/page.rs`): `page` and `size` are unsigned (`u32`); missing or `0` takes the default (page 1, size 10), and `size` above 100 is `400`. Rows are ordered by `updated_at, created_at`, and `data` is a `PageData`, where `total` is the row count before paging:
 
 ```json
 { "items": [ ... ], "total": 42 }

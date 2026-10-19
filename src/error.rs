@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use axum::response::{IntoResponse, Response as AxumResponse};
 use serde::Serialize;
 use tokio_postgres::error::SqlState;
@@ -32,7 +34,7 @@ impl AppError {
     }
 
     /// `Internal` error for a failed call: `"{context}: {err}"`.
-    pub fn internal_with(context: impl std::fmt::Display, err: impl std::fmt::Display) -> Self {
+    pub fn internal_with(context: impl Display, err: impl Display) -> Self {
         Self::Internal(format!("{context}: {err}"))
     }
 

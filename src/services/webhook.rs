@@ -76,10 +76,10 @@ impl WebhookService {
             }
             Err(err) => return Err(err),
         };
-        if target.channel_code != Channel::WEBHOOK {
+        if target.channel != Channel::WEBHOOK {
             return Err(AppError::bad_request(format!(
                 "target `{code}` belongs to channel `{}`, not WEBHOOK",
-                target.channel_code
+                target.channel
             )));
         }
         Ok(target.id)

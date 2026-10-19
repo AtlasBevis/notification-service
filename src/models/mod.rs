@@ -23,8 +23,8 @@ pub use notification::{AcceptedNotification, DeliveryDraft};
 pub use notify_msg::{NotifyMessage, NotifyValue, TargetPayload};
 pub use notify_request::NotifyRequest;
 pub use page::{PageData, PageRequest};
-pub use source::{CreateSourceRequest, PatchMetadataRequest, SourceData};
-pub use target::{CreateTargetRequest, Recipients, TargetData};
+pub use source::{SourceData, SourceRequest};
+pub use target::{Recipients, TargetData, TargetRequest};
 pub use template::{SaveTemplateRequest, TemplateData};
 pub use webhook::{
     SaveWebhookAuthRequest, SaveWebhookRequest, TokenBodyFormat, WebhookAuthConfig,

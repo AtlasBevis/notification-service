@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use crate::models::{
-    ApiQuery, ApiRequest, ApiResponse, CreateSourceRequest, PageData, PageRequest,
-    PatchMetadataRequest, SourceData,
+    ApiQuery, ApiRequest, ApiResponse, PageData, PageRequest, SourceData, SourceRequest,
 };
 use crate::services::SourceTrait;
 use axum::extract::{Path, State};
@@ -47,10 +46,10 @@ impl SourceController {
 
     pub async fn create_source(
         State(this): State<Arc<Self>>,
-        ApiRequest(mut payload): ApiRequest<CreateSourceRequest>,
+        ApiRequest(mut payload): ApiRequest<SourceRequest>,
     ) -> ApiResponse {
         payload.normalize();
-        if let Err(err) = payload.validate() {
+        if let Err(err) = payload.validate(true) {
             return err.to_response();
         }
 
@@ -60,16 +59,16 @@ impl SourceController {
         }
     }
 
-    pub async fn patch_metadata(
+    pub async fn update_source(
         State(this): State<Arc<Self>>,
-        ApiRequest(mut payload): ApiRequest<PatchMetadataRequest>,
+        ApiRequest(mut payload): ApiRequest<SourceRequest>,
     ) -> ApiResponse {
         payload.normalize();
-        if let Err(err) = payload.validate() {
+        if let Err(err) = payload.validate(false) {
             return err.to_response();
         }
 
-        match this.svc.patch_metadata(payload).await {
+        match this.svc.update(payload).await {
             Ok(()) => ApiResponse::ok(),
             Err(err) => err.to_response(),
         }
