@@ -1,7 +1,7 @@
 use crate::enums::{Channel, Status};
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    CreateDefinitionRequest, DefinitionData, DefinitionInternal, DefinitionTarget, PageData,
+    CreateDefinitionRequest, DefinitionData, DefinitionInternal, DefinitionTargetRequest, PageData,
     PageRequest, PutDefinitionRequest, TargetInternalData, TemplateData,
 };
 use crate::repository::DefinitionRepository;
@@ -67,7 +67,7 @@ impl DefinitionService {
     ) -> AppResult<DefinitionInternal> {
         // source
         let source = match self.sources.get_by_code(source).await {
-            Ok(source) => source,
+            Ok(data) => data,
             Err(AppError::NotFound(_)) => {
                 return Err(AppError::bad_request(format!("unknown source `{source}`")))
             }
@@ -75,30 +75,41 @@ impl DefinitionService {
         };
 
         // channel
-        let channel = match self.channels.get_by_code(channel_code).await {
-            Ok(channel) => channel,
+        let channel = match self.channels.get_by_code(channel).await {
+            Ok(data) => data,
             Err(AppError::NotFound(_)) => {
                 return Err(AppError::bad_request(format!(
-                    "unknown channel `{channel_code}`"
+                    "unknown channel `{channel}`"
                 )))
             }
             Err(err) => return Err(err),
         };
         let is_webhook = channel.code == Channel::WEBHOOK;
 
-        // get targets
-        let codes: Vec<String> = items.iter().map(|i| i.target_code.clone()).collect();
+        // targets: one query for every target code
+        let codes: Vec<String> = items.iter().map(|i| i.code.clone()).collect();
         let found = self.targets.get_by_list_code(&codes).await?;
-        let by_code: HashMap<&str, &TargetInternalData> =
+        let target_map: HashMap<&str, &TargetInternalData> =
             found.iter().map(|t| (t.code.as_str(), t)).collect();
 
-        let mut links = Vec::with_capacity(items.len());
-        let mut targets_map = HashMap::with_capacity(items.len());
+        // templates: one query for every template code the targets link to
+        let mut template_codes: Vec<String> = items
+            .iter()
+            .filter_map(|i| i.template_code.clone())
+            .collect();
+        template_codes.sort_unstable();
+        template_codes.dedup();
+        let templates = self.templates.get_by_codes(&template_codes).await?;
+        let template_map: HashMap<&str, &TemplateData> =
+            templates.iter().map(|t| (t.code.as_str(), t)).collect();
+
+        let mut target_ids = Vec::with_capacity(items.len());
+        let mut template_ids = Vec::with_capacity(items.len());
         for item in items {
-            let Some(&target) = by_code.get(item.target_code.as_str()) else {
+            let Some(&target) = target_map.get(item.code.as_str()) else {
                 return Err(AppError::bad_request(format!(
                     "unknown target `{}`",
-                    item.target_code
+                    item.code
                 )));
             };
             if target.channel_id != channel.id {
@@ -107,55 +118,37 @@ impl DefinitionService {
                     target.code, channel.code
                 )));
             }
-            links.push(DefinitionTarget {
-                target_id: target.id,
-                template_id: item.template_id,
-            });
-            targets_map.insert(target.id, target.clone());
-        }
 
-        // templates: one query for every template_id the targets link to
-        let mut template_ids: Vec<i32> = links.iter().filter_map(|l| l.template_id).collect();
-        template_ids.sort_unstable();
-        template_ids.dedup();
-        let templates: HashMap<i32, TemplateData> = self
-            .templates
-            .get_by_ids(&template_ids)
-            .await?
-            .into_iter()
-            .map(|t| (t.id, t))
-            .collect();
-
-        let mut template_map = HashMap::with_capacity(links.len());
-        for link in &links {
-            let template = match link.template_id {
-                Some(template_id) => {
-                    let Some(template) = templates.get(&template_id) else {
+            let template_id = match &item.template_code {
+                Some(template_code) => {
+                    let Some(&template) = template_map.get(template_code.as_str()) else {
                         return Err(AppError::bad_request(format!(
-                            "template id `{template_id}` has no ACTIVE version"
+                            "template `{template_code}` not found or has no ACTIVE version"
                         )));
                     };
                     if template.status != Status::Active {
                         return Err(AppError::bad_request(format!(
-                            "template id `{template_id}` is not ACTIVE"
+                            "template `{template_code}` is not ACTIVE"
                         )));
                     }
                     if template.is_json() != is_webhook {
                         return Err(AppError::bad_request(format!(
                             "template `{}` format `{}` is not valid for channel `{}`",
-                            template.name, template.format, channel.code
+                            template.code, template.format, channel.code
                         )));
                     }
-                    Some(template.clone())
+                    Some(template.id)
                 }
                 None => None,
             };
-            template_map.insert(link.target_id, template);
+
+            target_ids.push(target.id);
+            template_ids.push(template_id);
         }
 
-        if !is_webhook && links.iter().all(|t| t.template_id.is_none()) {
+        if !is_webhook && template_ids.iter().all(Option::is_none) {
             return Err(AppError::bad_request(format!(
-                "channel `{}` requires a template_id on at least one target",
+                "channel `{}` requires a template_code on at least one target",
                 channel.code
             )));
         }
@@ -163,11 +156,8 @@ impl DefinitionService {
         Ok(DefinitionInternal {
             source,
             channel,
-            targets: DefinitionTargetDataInternal {
-                links,
-                targets_map,
-                template_map,
-            },
+            target_ids,
+            template_ids,
         })
     }
 }
@@ -212,7 +202,8 @@ impl DefinitionTrait for DefinitionService {
                 &req,
                 resolved.source.id,
                 resolved.channel.id,
-                &resolved.targets.links,
+                &resolved.target_ids,
+                &resolved.template_ids,
             )
             .await
         {
@@ -237,7 +228,8 @@ impl DefinitionTrait for DefinitionService {
                 &req,
                 resolved.source.id,
                 resolved.channel.id,
-                &resolved.targets.links,
+                &resolved.target_ids,
+                &resolved.template_ids,
             )
             .await
         {

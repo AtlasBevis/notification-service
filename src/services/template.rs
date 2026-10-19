@@ -12,7 +12,7 @@ pub trait TemplateTrait: Send + Sync {
     async fn get_active_by_id(&self, id: i32) -> AppResult<TemplateData>;
     /// Latest ACTIVE version of each template in `ids`, in one query. Missing
     /// ids have no ACTIVE version; the caller checks `status`.
-    async fn get_by_ids(&self, ids: &[i32]) -> AppResult<Vec<TemplateData>>;
+    async fn get_by_codes(&self, codes: &[String]) -> AppResult<Vec<TemplateData>>;
     async fn create(&self, req: SaveTemplateRequest) -> AppResult<TemplateData>;
 }
 
@@ -87,11 +87,11 @@ impl TemplateTrait for TemplateService {
         Ok(t)
     }
 
-    async fn get_by_ids(&self, ids: &[i32]) -> AppResult<Vec<TemplateData>> {
-        if ids.is_empty() {
+    async fn get_by_codes(&self, codes: &[String]) -> AppResult<Vec<TemplateData>> {
+        if codes.is_empty() {
             return Ok(Vec::new());
         }
-        self.repo.find_by_ids(ids).await
+        self.repo.find_by_codes(codes).await
     }
 
     async fn create(&self, req: SaveTemplateRequest) -> AppResult<TemplateData> {

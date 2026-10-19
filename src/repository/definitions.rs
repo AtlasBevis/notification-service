@@ -2,6 +2,7 @@ use crate::models::{PageData, PageRequest};
 use crate::utils::TimeUtils;
 use deadpool_postgres::{Pool, Transaction};
 
+use crate::enums::{Level, Status};
 use crate::error::{AppError, AppResult};
 use crate::models::{CreateDefinitionRequest, DefinitionData, PutDefinitionRequest};
 
@@ -23,7 +24,12 @@ impl DefinitionRepository {
                    (
                        SELECT COALESCE(
                            jsonb_agg(
-                               jsonb_build_object('code', t.code, 'template_code', tp.code)
+                               jsonb_build_object(
+                                   'target_id', t.id,
+                                   'code', t.code,
+                                   'template_id', dt.template_id,
+                                   'template_code', tp.code
+                               )
                                ORDER BY dt.id
                            ),
                            '[]'::jsonb
@@ -50,7 +56,12 @@ impl DefinitionRepository {
                    (
                        SELECT COALESCE(
                            jsonb_agg(
-                               jsonb_build_object('code', t.code, 'template_code', tp.code)
+                               jsonb_build_object(
+                                   'target_id', t.id,
+                                   'code', t.code,
+                                   'template_id', dt.template_id,
+                                   'template_code', tp.code
+                               )
                                ORDER BY dt.id
                            ),
                            '[]'::jsonb
@@ -89,7 +100,12 @@ impl DefinitionRepository {
                        (
                            SELECT COALESCE(
                                jsonb_agg(
-                                   jsonb_build_object('code', t.code, 'template_code', tp.code)
+                                   jsonb_build_object(
+                                   'target_id', t.id,
+                                   'code', t.code,
+                                   'template_id', dt.template_id,
+                                   'template_code', tp.code
+                               )
                                    ORDER BY dt.id
                                ),
                                '[]'::jsonb
@@ -183,8 +199,8 @@ impl DefinitionRepository {
                     &code,
                     &req.name,
                     &req.description,
-                    &req.status,
-                    &req.level,
+                    &req.status.map(Status::as_str),
+                    &req.level.map(Level::as_str),
                     &source_id,
                     &channel_id,
                     &TimeUtils::now(),
@@ -260,7 +276,12 @@ impl DefinitionRepository {
                    (
                        SELECT COALESCE(
                            jsonb_agg(
-                               jsonb_build_object('code', t.code, 'template_code', tp.code)
+                               jsonb_build_object(
+                                   'target_id', t.id,
+                                   'code', t.code,
+                                   'template_id', dt.template_id,
+                                   'template_code', tp.code
+                               )
                                ORDER BY dt.id
                            ),
                            '[]'::jsonb

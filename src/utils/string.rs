@@ -16,7 +16,6 @@ impl StringUtils {
         std::env::var(key).ok().and_then(Self::non_empty)
     }
 
-    #[allow(dead_code)]
     pub fn trim_op(op: &mut Option<String>) {
         if let Some(v) = op.as_mut() {
             *v = v.trim().to_string();

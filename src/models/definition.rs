@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::enums::{Channel, Level, Status};
 use crate::error::{AppError, AppResult};
-use crate::models::{ChannelData, SourceData, TargetInternalData, TemplateData};
+use crate::models::{ChannelData, SourceData};
+use crate::utils::StringUtils;
 
 const DEFINITION_CODE_LEN: usize = 50;
 
@@ -19,7 +18,7 @@ pub struct DefinitionData {
     pub level: Level,
     pub source_id: i32,
     pub channel_id: i32,
-    pub targets: Vec<DefinitionTargetRequest>,
+    pub targets: Vec<DefinitionTargetData>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
@@ -50,9 +49,15 @@ impl DefinitionData {
     }
 }
 
+/// One linked target, in `definition_targets` order. The ids are for sending
+/// and are not part of the response.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DefinitionTargetRequest {
+pub struct DefinitionTargetData {
+    #[serde(skip_serializing)]
+    pub target_id: i32,
     pub code: String,
+    #[serde(skip_serializing)]
+    pub template_id: Option<i32>,
     pub template_code: Option<String>,
 }
 
@@ -68,16 +73,19 @@ pub struct CreateDefinitionRequest {
     pub targets: Vec<DefinitionTargetRequest>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct DefinitionTargetRequest {
+    pub code: String,
+    pub template_code: Option<String>,
+}
+
 impl CreateDefinitionRequest {
     pub fn normalize(&mut self) {
         self.code = self.code.trim().to_ascii_uppercase();
         self.name = self.name.trim().to_string();
         self.source = self.source.trim().to_ascii_uppercase();
-        self.description = self
-            .description
-            .take()
-            .map(|d| d.trim().to_string())
-            .filter(|d| !d.is_empty());
+        StringUtils::trim_op(&mut self.description);
+
         for target in &mut self.targets {
             target.code = target.code.trim().to_ascii_uppercase();
             target.template_code = target
@@ -145,8 +153,8 @@ impl CreateDefinitionRequest {
 pub struct PutDefinitionRequest {
     pub name: String,
     pub description: Option<String>,
-    pub status: Option<String>,
-    pub level: Option<String>,
+    pub status: Option<Status>,
+    pub level: Option<Level>,
     pub source: String,
     pub channel: Channel,
     pub targets: Vec<DefinitionTargetRequest>,
@@ -156,13 +164,7 @@ impl PutDefinitionRequest {
     pub fn normalize(&mut self) {
         self.name = self.name.trim().to_string();
         self.source = self.source.trim().to_ascii_uppercase();
-        self.description = self
-            .description
-            .take()
-            .map(|d| d.trim().to_string())
-            .filter(|d| !d.is_empty());
-        self.status = self.status.take().map(|s| s.trim().to_ascii_uppercase());
-        self.level = self.level.take().map(|l| l.trim().to_ascii_uppercase());
+        StringUtils::trim_op(&mut self.description);
         for target in &mut self.targets {
             target.code = target.code.trim().to_ascii_uppercase();
             target.template_code = target
@@ -187,19 +189,9 @@ impl PutDefinitionRequest {
                 ));
             }
         }
-        if let Some(status) = &self.status {
-            if !matches!(
-                Status::parse(status),
-                Some(Status::Active | Status::Inactive)
-            ) {
+        if let Some(status) = self.status {
+            if !matches!(status, Status::Active | Status::Inactive) {
                 return Err(AppError::bad_request("status must be ACTIVE or INACTIVE"));
-            }
-        }
-        if let Some(level) = &self.level {
-            if Level::parse(level).is_none() {
-                return Err(AppError::bad_request(
-                    "level must be INFO, WARN, ERROR or CRITICAL",
-                ));
             }
         }
         if self.source.is_empty() {
@@ -223,15 +215,11 @@ impl PutDefinitionRequest {
     }
 }
 
-// --------------------------
-//  use for INTERNAL
-pub struct DefinitionTargetDataInternal {
-    targets_map: HashMap<i32, TargetInternalData>,
-    template_map: HashMap<i32, Option<TemplateData>>,
-}
-
+/// What `DefinitionService` resolved from a create / update request.
+/// `target_ids[i]` is linked with `template_ids[i]`, in request order.
 pub struct DefinitionInternal {
-    source: SourceData,
-    channel: ChannelData,
-    targets: DefinitionTargetDataInternal,
+    pub source: SourceData,
+    pub channel: ChannelData,
+    pub target_ids: Vec<i32>,
+    pub template_ids: Vec<Option<i32>>,
 }

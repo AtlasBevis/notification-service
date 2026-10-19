@@ -46,8 +46,16 @@ impl DefinitionGrpc {
         let body = PutDefinitionRequest {
             name: request.name,
             description: request.description,
-            status: request.status,
-            level: request.level,
+            status: request
+                .status
+                .as_deref()
+                .map(ProtoConvert::record_status)
+                .transpose()?,
+            level: request
+                .level
+                .as_deref()
+                .map(ProtoConvert::level)
+                .transpose()?,
             source: request.source,
             channel: ProtoConvert::channel(&request.channel_code)?,
             targets: Self::to_targets(request.targets),
