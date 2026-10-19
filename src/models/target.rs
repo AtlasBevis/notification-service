@@ -90,21 +90,26 @@ fn string_list(metadata: &Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Body of `POST /targets`.
 #[derive(Debug, Clone, Deserialize)]
-pub struct TargetRequest {
+pub struct CreateTargetRequest {
     pub code: String,
+
     pub channel: Channel,
+
     pub name: String,
+
+    #[serde(default)]
     pub metadata: Map<String, Value>,
 }
 
-impl TargetRequest {
+impl CreateTargetRequest {
     pub fn normalize(&mut self) {
         self.code = self.code.trim().to_ascii_uppercase();
         self.name = self.name.trim().to_string();
     }
 
-    pub fn validate(&self, is_create: bool) -> AppResult<()> {
+    pub fn validate(&self) -> AppResult<()> {
         if self.code.is_empty() {
             return Err(AppError::bad_request("code is required"));
         }
@@ -117,10 +122,22 @@ impl TargetRequest {
             return Err(AppError::bad_request("code must be alphanumeric, '_'"));
         }
 
-        if is_create && self.name.is_empty() {
+        if self.name.is_empty() {
             return Err(AppError::bad_request("name is required"));
         }
-
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PutTargetRequest {
+    pub name: String,
+    #[serde(default)]
+    pub metadata: Map<String, Value>,
+}
+
+impl PutTargetRequest {
+    pub fn normalize(&mut self) {
+        self.name = self.name.trim().to_string();
     }
 }

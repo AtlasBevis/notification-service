@@ -21,6 +21,6 @@ pub use notification::{NotificationService, NotificationTrait};
 pub use notify::NotifyService;
 pub use notify::NotifyTrait;
 pub use source::{SourceService, SourceTrait};
-pub use targets::{TargetTrait, TargetService};
+pub use targets::{TargetService, TargetTrait};
 pub use template::{TemplateService, TemplateTrait};
 pub use webhook::{WebhookService, WebhookServiceTrait};

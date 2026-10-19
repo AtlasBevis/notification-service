@@ -1,4 +1,4 @@
-use crate::models::{PageData, PageRequest, SourceRequest};
+use crate::models::{CreateSourceRequest, PageData, PageRequest, PutSourceRequest};
 use crate::utils::TimeUtils;
 use deadpool_postgres::Pool;
 use serde_json::Value;
@@ -98,7 +98,7 @@ impl SourceRepository {
         }
     }
 
-    pub async fn insert(&self, req: &SourceRequest) -> AppResult<i32> {
+    pub async fn insert(&self, req: &CreateSourceRequest) -> AppResult<i32> {
         let client = self.pool.get().await?;
         let row = client
             .query_one(
@@ -114,7 +114,7 @@ impl SourceRepository {
     }
 
     /// An empty `name` keeps the stored name; `metadata` replaces the stored value.
-    pub async fn update(&self, req: &SourceRequest) -> AppResult<()> {
+    pub async fn update(&self, code: &str, req: &PutSourceRequest) -> AppResult<()> {
         let client = self.pool.get().await?;
         let n = client
             .execute(
@@ -126,7 +126,7 @@ impl SourceRepository {
                 WHERE code = $1
                 "#,
                 &[
-                    &req.code,
+                    &code,
                     &req.name,
                     &Value::Object(req.metadata.clone()),
                     &TimeUtils::now(),
@@ -135,10 +135,7 @@ impl SourceRepository {
             .await?;
 
         if n == 0 {
-            return Err(AppError::not_found(format!(
-                "source `{}` not found",
-                req.code
-            )));
+            return Err(AppError::not_found(format!("source `{}` not found", code)));
         }
         Ok(())
     }

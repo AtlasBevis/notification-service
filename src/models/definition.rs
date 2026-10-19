@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::enums::{Level, Status};
+use crate::enums::{Channel, Level, Status};
 use crate::error::{AppError, AppResult};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -66,7 +66,7 @@ pub struct SaveDefinitionRequest {
     #[serde(default)]
     pub level: Option<String>,
     pub source_code: String,
-    pub channel_code: String,
+    pub channel: Channel,
     pub targets: Vec<DefinitionTargetRequest>,
 }
 
@@ -89,7 +89,6 @@ impl SaveDefinitionRequest {
         self.status = self.status.take().map(|s| s.trim().to_ascii_uppercase());
         self.level = self.level.take().map(|l| l.trim().to_ascii_uppercase());
         self.source_code = self.source_code.trim().to_ascii_uppercase();
-        self.channel_code = self.channel_code.trim().to_ascii_uppercase();
         for target in &mut self.targets {
             target.target_code = target.target_code.trim().to_ascii_uppercase();
         }
@@ -141,9 +140,6 @@ impl SaveDefinitionRequest {
         }
         if self.source_code.is_empty() {
             return Err(AppError::bad_request("source_code is required"));
-        }
-        if self.channel_code.is_empty() {
-            return Err(AppError::bad_request("channel_code is required"));
         }
         if self.targets.is_empty() {
             return Err(AppError::bad_request("targets must not be empty"));

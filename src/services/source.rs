@@ -5,7 +5,7 @@ use tokio::sync::RwLock;
 
 use crate::enums::Status;
 use crate::error::{AppError, AppResult};
-use crate::models::{PageData, PageRequest, SourceData, SourceRequest};
+use crate::models::{CreateSourceRequest, PageData, PageRequest, PutSourceRequest, SourceData};
 use crate::repository::SourceRepository;
 
 #[async_trait]
@@ -14,8 +14,8 @@ pub trait SourceTrait: Send + Sync {
     async fn get_by_code(&self, code: &str) -> AppResult<SourceData>;
     async fn get_active_by_code(&self, code: &str) -> AppResult<SourceData>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<SourceData>;
-    async fn create(&self, req: SourceRequest) -> AppResult<()>;
-    async fn update(&self, req: SourceRequest) -> AppResult<()>;
+    async fn create(&self, req: CreateSourceRequest) -> AppResult<()>;
+    async fn update(&self, code: &str, req: PutSourceRequest) -> AppResult<()>;
 }
 
 #[derive(Clone)]
@@ -88,7 +88,7 @@ impl SourceTrait for SourceService {
         Ok(s)
     }
 
-    async fn create(&self, req: SourceRequest) -> AppResult<()> {
+    async fn create(&self, req: CreateSourceRequest) -> AppResult<()> {
         if self.get_by_code(&req.code).await.is_ok() {
             return Err(AppError::conflict(format!(
                 "source `{}` already exists",
@@ -105,18 +105,17 @@ impl SourceTrait for SourceService {
         }
     }
 
-    async fn update(&self, req: SourceRequest) -> AppResult<()> {
-        match self.repo.update(&req).await {
+    async fn update(&self, code: &str, req: PutSourceRequest) -> AppResult<()> {
+        match self.repo.update(code, &req).await {
             Ok(()) => {
-                self.cache.write().await.remove(&req.code);
+                self.cache.write().await.remove(code);
                 Ok(())
             }
-            Err(AppError::NotFound(_)) => Err(AppError::not_found(format!(
-                "source `{}` not found",
-                req.code
-            ))),
+            Err(AppError::NotFound(_)) => {
+                Err(AppError::not_found(format!("source `{}` not found", code)))
+            }
             Err(err) => {
-                tracing::error!(error = %err, code = %req.code, "update source failed");
+                tracing::error!(error = %err, code, "update source failed");
                 Err(err)
             }
         }

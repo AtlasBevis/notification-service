@@ -4,6 +4,7 @@ use prost_types::{ListValue, Struct, Timestamp};
 use serde_json::{Map, Number, Value};
 use tonic::Status;
 
+use crate::enums::Channel;
 use crate::error::{AppError, AppResult};
 
 /// Conversions between protobuf well-known types and the service's models.
@@ -30,6 +31,13 @@ impl ProtoConvert {
             return Err(AppError::bad_request(format!("{field} is required")));
         }
         Ok(key)
+    }
+
+    /// `channel_code` from a request message, parsed like the HTTP JSON enum.
+    pub fn channel(value: &str) -> AppResult<Channel> {
+        let key = value.trim().to_ascii_uppercase();
+        Channel::parse(&key)
+            .ok_or_else(|| AppError::bad_request(format!("unknown channel `{}`", value.trim())))
     }
 
     pub fn map(value: Option<Struct>) -> Map<String, Value> {

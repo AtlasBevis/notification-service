@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::models::{
-    ApiQuery, ApiRequest, ApiResponse, PageData, PageRequest, SourceData, SourceRequest,
+    ApiQuery, ApiRequest, ApiResponse, CreateSourceRequest, PageData, PageRequest,
+    PutSourceRequest, SourceData,
 };
 use crate::services::SourceTrait;
 use axum::extract::{Path, State};
@@ -46,10 +47,10 @@ impl SourceController {
 
     pub async fn create_source(
         State(this): State<Arc<Self>>,
-        ApiRequest(mut payload): ApiRequest<SourceRequest>,
+        ApiRequest(mut payload): ApiRequest<CreateSourceRequest>,
     ) -> ApiResponse {
         payload.normalize();
-        if let Err(err) = payload.validate(true) {
+        if let Err(err) = payload.validate() {
             return err.to_response();
         }
 
@@ -61,14 +62,15 @@ impl SourceController {
 
     pub async fn update_source(
         State(this): State<Arc<Self>>,
-        ApiRequest(mut payload): ApiRequest<SourceRequest>,
+        Path(code): Path<String>,
+        ApiRequest(mut payload): ApiRequest<PutSourceRequest>,
     ) -> ApiResponse {
-        payload.normalize();
-        if let Err(err) = payload.validate(false) {
-            return err.to_response();
+        let code = code.trim().to_ascii_uppercase();
+        if code.is_empty() {
+            return ApiResponse::bad_request("code is required");
         }
-
-        match this.svc.update(payload).await {
+        payload.normalize();
+        match this.svc.update(&code, payload).await {
             Ok(()) => ApiResponse::ok(),
             Err(err) => err.to_response(),
         }

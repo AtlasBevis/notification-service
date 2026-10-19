@@ -64,15 +64,12 @@ impl DefinitionService {
             }
             Err(err) => return Err(err),
         };
-        let code = Channel::parse(&req.channel_code).ok_or_else(|| {
-            AppError::bad_request(format!("unknown channel `{}`", req.channel_code))
-        })?;
-        let channel = match self.channels.get_by_code(&code).await {
+        let channel = match self.channels.get_by_code(req.channel).await {
             Ok(channel) => channel,
             Err(AppError::NotFound(_)) => {
                 return Err(AppError::bad_request(format!(
                     "unknown channel `{}`",
-                    req.channel_code
+                    req.channel
                 )))
             }
             Err(err) => return Err(err),

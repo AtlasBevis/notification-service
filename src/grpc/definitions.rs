@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use tonic::{Request, Response, Status};
 
+use crate::error::AppResult;
+
 use super::convert::ProtoConvert;
 use super::pb::definitions_server::Definitions;
 use super::pb::{
@@ -21,15 +23,15 @@ impl DefinitionGrpc {
         Self { svc }
     }
 
-    fn to_request(request: SaveDefinitionRpcRequest) -> SaveDefinitionRequest {
-        SaveDefinitionRequest {
+    fn to_request(request: SaveDefinitionRpcRequest) -> AppResult<SaveDefinitionRequest> {
+        Ok(SaveDefinitionRequest {
             code: request.code,
             name: request.name,
             description: request.description,
             status: request.status,
             level: request.level,
             source_code: request.source_code,
-            channel_code: request.channel_code,
+            channel: ProtoConvert::channel(&request.channel_code)?,
             targets: request
                 .targets
                 .into_iter()
@@ -38,7 +40,7 @@ impl DefinitionGrpc {
                     template_id: t.template_id,
                 })
                 .collect(),
-        }
+        })
     }
 
     fn to_reply(data: DefinitionData) -> Definition {
@@ -103,7 +105,7 @@ impl Definitions for DefinitionGrpc {
         &self,
         request: Request<SaveDefinitionRpcRequest>,
     ) -> Result<Response<Definition>, Status> {
-        let mut payload = Self::to_request(request.into_inner());
+        let mut payload = Self::to_request(request.into_inner()).map_err(ProtoConvert::status)?;
         payload.normalize();
         payload.validate().map_err(ProtoConvert::status)?;
 
@@ -119,7 +121,7 @@ impl Definitions for DefinitionGrpc {
         &self,
         request: Request<SaveDefinitionRpcRequest>,
     ) -> Result<Response<Definition>, Status> {
-        let mut payload = Self::to_request(request.into_inner());
+        let mut payload = Self::to_request(request.into_inner()).map_err(ProtoConvert::status)?;
         payload.normalize();
         payload.validate().map_err(ProtoConvert::status)?;
 

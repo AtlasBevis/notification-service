@@ -32,7 +32,7 @@ Configuration endpoints are available under `/notification/sources`, `/notificat
   "status": "ACTIVE",
   "level": "ERROR",
   "source_code": "AIRFLOW",
-  "channel_code": "EMAIL",
+  "channel": "EMAIL",
   "targets": [
     { "target_code": "DATA_TEAM", "template_id": 1 },
     { "target_code": "ONCALL" }
@@ -145,11 +145,11 @@ For `TOKEN_ENDPOINT`, set `auth_mode = 'TOKEN_ENDPOINT'`, provide `token_url`, `
 | `GET /sources` | `notification.v1.Sources/ListSources` |
 | `GET /sources/{code}` | `notification.v1.Sources/GetSource` |
 | `POST /sources` | `notification.v1.Sources/CreateSource` |
-| `PUT /sources/{code}` | `notification.v1.Sources/UpdateSource` (`code` in the message) |
+| `PUT /sources/{code}` | `notification.v1.Sources/UpdateSource` (`PutSourceRequest`, `code` in the message) |
 | `GET /targets` | `notification.v1.Targets/ListTargets` |
 | `GET /targets/{code}` | `notification.v1.Targets/GetTarget` |
 | `POST /targets` | `notification.v1.Targets/CreateTarget` |
-| `PUT /targets/{code}` | `notification.v1.Targets/UpdateTarget` (`code` in the message) |
+| `PUT /targets/{code}` | `notification.v1.Targets/UpdateTarget` (`PutTargetRequest`, `code` in the message) |
 | `POST /templates` | `notification.v1.Templates/SaveTemplate` |
 | `GET /definitions` | `notification.v1.Definitions/ListDefinitions` |
 | `GET /definitions/{code}` | `notification.v1.Definitions/GetDefinition` |
@@ -207,11 +207,11 @@ Webhook method and timeout come from `webhook_configs`. Each webhook delivery ca
 | `GET` | `/notification/sources` | List sources |
 | `POST` | `/notification/sources` | Create a source |
 | `GET` | `/notification/sources/{code}` | Read a source |
-| `PUT` | `/notification/sources/{code}` | Update a source: an empty `name` keeps the stored name, `metadata` replaces the stored value |
+| `PUT` | `/notification/sources/{code}` | Update a source (`PutSourceRequest`: code from the URL; `name` required, `name` and `metadata` replace the stored values) |
 | `GET` | `/notification/targets` | List targets |
 | `POST` | `/notification/targets` | Create a target |
 | `GET` | `/notification/targets/{code}` | Read a target |
-| `PUT` | `/notification/targets/{code}` | Update a target: the channel never changes; `name` (required) and `metadata` replace the stored values |
+| `PUT` | `/notification/targets/{code}` | Update a target (`PutTargetRequest`: code from the URL, the channel never changes; `name` required, `name` and `metadata` replace the stored values) |
 | `POST` | `/notification/templates` | Create a template version (creates the template on first use of `name`) |
 | `GET` | `/notification/definitions` | List definitions |
 | `POST` | `/notification/definitions` | Create a definition |

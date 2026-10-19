@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::{
     enums::Status,
-    models::{TargetData, TargetRequest},
+    models::{CreateTargetRequest, PutTargetRequest, TargetData},
 };
 
 use crate::error::{AppError, AppResult};
@@ -89,7 +89,7 @@ impl TargetsRepository {
         TargetData::map_row(&row)
     }
 
-    pub async fn insert(&self, req: &TargetRequest, channel_id: i32) -> AppResult<i32> {
+    pub async fn insert(&self, req: &CreateTargetRequest, channel_id: i32) -> AppResult<i32> {
         let client = self.pool.get().await?;
         let row = client
             .query_one(
@@ -111,7 +111,7 @@ impl TargetsRepository {
     }
 
     /// The channel never changes; `name` and `metadata` replace the stored values.
-    pub async fn update(&self, req: &TargetRequest) -> AppResult<()> {
+    pub async fn update(&self, code: &str, req: &PutTargetRequest) -> AppResult<()> {
         let client = self.pool.get().await?;
         let n = client
             .execute(
@@ -123,7 +123,7 @@ impl TargetsRepository {
                 WHERE code = $1
                 "#,
                 &[
-                    &req.code,
+                    &code,
                     &req.name,
                     &Value::Object(req.metadata.clone()),
                     &TimeUtils::now(),
@@ -132,10 +132,7 @@ impl TargetsRepository {
             .await?;
 
         if n == 0 {
-            return Err(AppError::not_found(format!(
-                "target `{}` not found",
-                req.code
-            )));
+            return Err(AppError::not_found(format!("target `{}` not found", code)));
         }
         Ok(())
     }

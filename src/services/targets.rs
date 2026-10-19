@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::enums::Status;
 use crate::error::{AppError, AppResult};
-use crate::models::{PageData, PageRequest, TargetData, TargetRequest};
+use crate::models::{CreateTargetRequest, PageData, PageRequest, PutTargetRequest, TargetData};
 use crate::repository::TargetsRepository;
 use crate::services::ChannelTrait;
 
@@ -13,8 +13,8 @@ pub trait TargetTrait: Send + Sync {
     async fn list(&self, page: PageRequest) -> AppResult<PageData<TargetData>>;
     async fn get_by_code(&self, code: &str) -> AppResult<TargetData>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData>;
-    async fn create(&self, req: TargetRequest) -> AppResult<()>;
-    async fn update(&self, req: TargetRequest) -> AppResult<()>;
+    async fn create(&self, req: CreateTargetRequest) -> AppResult<()>;
+    async fn update(&self, code: &str, req: PutTargetRequest) -> AppResult<()>;
 }
 
 #[derive(Clone)]
@@ -47,7 +47,7 @@ impl TargetTrait for TargetService {
         Ok(t)
     }
 
-    async fn create(&self, req: TargetRequest) -> AppResult<()> {
+    async fn create(&self, req: CreateTargetRequest) -> AppResult<()> {
         let channel = match self.channels.get_by_code(req.channel).await {
             Ok(channel) => channel,
             Err(AppError::NotFound(_)) => {
@@ -72,15 +72,14 @@ impl TargetTrait for TargetService {
         }
     }
 
-    async fn update(&self, req: TargetRequest) -> AppResult<()> {
-        match self.repo.update(&req).await {
+    async fn update(&self, code: &str, req: PutTargetRequest) -> AppResult<()> {
+        match self.repo.update(code, &req).await {
             Ok(()) => Ok(()),
-            Err(AppError::NotFound(_)) => Err(AppError::not_found(format!(
-                "target `{}` not found",
-                req.code
-            ))),
+            Err(AppError::NotFound(_)) => {
+                Err(AppError::not_found(format!("target `{}` not found", code)))
+            }
             Err(err) => {
-                tracing::error!(error = %err, code = %req.code, "update target failed");
+                tracing::error!(error = %err, code, "update target failed");
                 Err(err)
             }
         }

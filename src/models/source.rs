@@ -33,23 +33,22 @@ impl SourceData {
     }
 }
 
+/// Body of `POST /sources`.
 #[derive(Debug, Clone, Deserialize)]
-pub struct SourceRequest {
+pub struct CreateSourceRequest {
     pub code: String,
-
     pub name: String,
-
     #[serde(default)]
     pub metadata: Map<String, Value>,
 }
 
-impl SourceRequest {
+impl CreateSourceRequest {
     pub fn normalize(&mut self) {
         self.code = self.code.trim().to_ascii_uppercase();
         self.name = self.name.trim().to_string();
     }
 
-    pub fn validate(&self, is_create: bool) -> AppResult<()> {
+    pub fn validate(&self) -> AppResult<()> {
         if self.code.is_empty() {
             return Err(AppError::bad_request("code is required"));
         }
@@ -62,9 +61,24 @@ impl SourceRequest {
             return Err(AppError::bad_request("code must be alphanumeric, '_'"));
         }
 
-        if is_create && self.name.is_empty() {
+        if self.name.is_empty() {
             return Err(AppError::bad_request("name is required"));
         }
         Ok(())
+    }
+}
+
+/// Body of `PUT /sources/{code}`; the code comes from the URL.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PutSourceRequest {
+    pub name: String,
+
+    #[serde(default)]
+    pub metadata: Map<String, Value>,
+}
+
+impl PutSourceRequest {
+    pub fn normalize(&mut self) {
+        self.name = self.name.trim().to_string();
     }
 }

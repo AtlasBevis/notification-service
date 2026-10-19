@@ -60,9 +60,9 @@ message PageRequest {
 service Sources {
   rpc ListSources(PageRequest) returns (SourceList);
   rpc GetSource(CodeRequest) returns (Source);
-  rpc CreateSource(SourceRequest) returns (google.protobuf.Empty);
-  // `code` selects the source; an empty `name` keeps the stored name.
-  rpc UpdateSource(SourceRequest) returns (google.protobuf.Empty);
+  rpc CreateSource(CreateSourceRequest) returns (google.protobuf.Empty);
+  // `code` selects the source (the URL path on HTTP).
+  rpc UpdateSource(PutSourceRequest) returns (google.protobuf.Empty);
 }
 
 message SourceList {
@@ -80,7 +80,13 @@ message Source {
   google.protobuf.Timestamp updated_at = 7;
 }
 
-message SourceRequest {
+message CreateSourceRequest {
+  string code = 1;
+  string name = 2;
+  google.protobuf.Struct metadata = 3;
+}
+
+message PutSourceRequest {
   string code = 1;
   string name = 2;
   google.protobuf.Struct metadata = 3;
@@ -93,9 +99,9 @@ message SourceRequest {
 service Targets {
   rpc ListTargets(PageRequest) returns (TargetList);
   rpc GetTarget(CodeRequest) returns (Target);
-  rpc CreateTarget(TargetRequest) returns (google.protobuf.Empty);
-  // `code` selects the target; `channel_code` is ignored (the channel never changes).
-  rpc UpdateTarget(TargetRequest) returns (google.protobuf.Empty);
+  rpc CreateTarget(CreateTargetRequest) returns (google.protobuf.Empty);
+  // `code` selects the target (the URL path on HTTP); the channel never changes.
+  rpc UpdateTarget(PutTargetRequest) returns (google.protobuf.Empty);
 }
 
 message TargetList {
@@ -114,11 +120,17 @@ message Target {
   google.protobuf.Timestamp updated_at = 8;
 }
 
-message TargetRequest {
+message CreateTargetRequest {
   string code = 1;
   string channel_code = 2;
   string name = 3;
   google.protobuf.Struct metadata = 4;
+}
+
+message PutTargetRequest {
+  string code = 1;
+  string name = 2;
+  google.protobuf.Struct metadata = 3;
 }
 
 // ---------------------------------------------------------------------------

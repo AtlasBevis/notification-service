@@ -5,10 +5,10 @@ use tonic::{Request, Response, Status};
 use super::convert::ProtoConvert;
 use super::pb::sources_server::Sources;
 use super::pb::{
-    CodeRequest, PageRequest as PageRpcRequest, Source, SourceList,
-    SourceRequest as SourceRpcRequest,
+    CodeRequest, CreateSourceRequest as CreateSourceRpcRequest, PageRequest as PageRpcRequest,
+    PutSourceRequest as PutSourceRpcRequest, Source, SourceList,
 };
-use crate::models::{PageRequest, SourceData, SourceRequest};
+use crate::models::{CreateSourceRequest, PageRequest, PutSourceRequest, SourceData};
 use crate::services::SourceTrait;
 
 /// gRPC counterpart of `SourceController`.
@@ -19,14 +19,6 @@ pub struct SourceGrpc {
 impl SourceGrpc {
     pub fn new(svc: Arc<dyn SourceTrait>) -> Self {
         Self { svc }
-    }
-
-    fn to_request(request: SourceRpcRequest) -> SourceRequest {
-        SourceRequest {
-            code: request.code,
-            name: request.name,
-            metadata: ProtoConvert::map(request.metadata),
-        }
     }
 
     fn to_reply(data: SourceData) -> Source {
@@ -75,11 +67,16 @@ impl Sources for SourceGrpc {
 
     async fn create_source(
         &self,
-        request: Request<SourceRpcRequest>,
+        request: Request<CreateSourceRpcRequest>,
     ) -> Result<Response<()>, Status> {
-        let mut payload = Self::to_request(request.into_inner());
+        let request = request.into_inner();
+        let mut payload = CreateSourceRequest {
+            code: request.code,
+            name: request.name,
+            metadata: ProtoConvert::map(request.metadata),
+        };
         payload.normalize();
-        payload.validate(true).map_err(ProtoConvert::status)?;
+        payload.validate().map_err(ProtoConvert::status)?;
 
         self.svc
             .create(payload)
@@ -90,14 +87,18 @@ impl Sources for SourceGrpc {
 
     async fn update_source(
         &self,
-        request: Request<SourceRpcRequest>,
+        request: Request<PutSourceRpcRequest>,
     ) -> Result<Response<()>, Status> {
-        let mut payload = Self::to_request(request.into_inner());
+        let request = request.into_inner();
+        let code = ProtoConvert::code(&request.code, "code").map_err(ProtoConvert::status)?;
+        let mut payload = PutSourceRequest {
+            name: request.name,
+            metadata: ProtoConvert::map(request.metadata),
+        };
         payload.normalize();
-        payload.validate(false).map_err(ProtoConvert::status)?;
 
         self.svc
-            .update(payload)
+            .update(&code, payload)
             .await
             .map_err(ProtoConvert::status)?;
         Ok(Response::new(()))

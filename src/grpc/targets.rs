@@ -5,10 +5,10 @@ use tonic::{Request, Response, Status};
 use super::convert::ProtoConvert;
 use super::pb::targets_server::Targets;
 use super::pb::{
-    CodeRequest, PageRequest as PageRpcRequest, Target, TargetList,
-    TargetRequest as TargetRpcRequest,
+    CodeRequest, CreateTargetRequest as CreateTargetRpcRequest, PageRequest as PageRpcRequest,
+    PutTargetRequest as PutTargetRpcRequest, Target, TargetList,
 };
-use crate::models::{PageRequest, TargetData, TargetRequest};
+use crate::models::{CreateTargetRequest, PageRequest, PutTargetRequest, TargetData};
 use crate::services::TargetTrait;
 
 /// gRPC counterpart of `TargetController`.
@@ -19,15 +19,6 @@ pub struct TargetGrpc {
 impl TargetGrpc {
     pub fn new(svc: Arc<dyn TargetTrait>) -> Self {
         Self { svc }
-    }
-
-    fn to_request(request: TargetRpcRequest) -> TargetRequest {
-        TargetRequest {
-            code: request.code,
-            channel: request.channel_code,
-            name: request.name,
-            metadata: ProtoConvert::map(request.metadata),
-        }
     }
 
     fn to_reply(data: TargetData) -> Target {
@@ -77,11 +68,17 @@ impl Targets for TargetGrpc {
 
     async fn create_target(
         &self,
-        request: Request<TargetRpcRequest>,
+        request: Request<CreateTargetRpcRequest>,
     ) -> Result<Response<()>, Status> {
-        let mut payload = Self::to_request(request.into_inner());
+        let request = request.into_inner();
+        let mut payload = CreateTargetRequest {
+            code: request.code,
+            channel: ProtoConvert::channel(&request.channel_code).map_err(ProtoConvert::status)?,
+            name: request.name,
+            metadata: ProtoConvert::map(request.metadata),
+        };
         payload.normalize();
-        payload.validate(true).map_err(ProtoConvert::status)?;
+        payload.validate().map_err(ProtoConvert::status)?;
 
         self.svc
             .create(payload)
@@ -92,14 +89,18 @@ impl Targets for TargetGrpc {
 
     async fn update_target(
         &self,
-        request: Request<TargetRpcRequest>,
+        request: Request<PutTargetRpcRequest>,
     ) -> Result<Response<()>, Status> {
-        let mut payload = Self::to_request(request.into_inner());
+        let request = request.into_inner();
+        let code = ProtoConvert::code(&request.code, "code").map_err(ProtoConvert::status)?;
+        let mut payload = PutTargetRequest {
+            name: request.name,
+            metadata: ProtoConvert::map(request.metadata),
+        };
         payload.normalize();
-        payload.validate(false).map_err(ProtoConvert::status)?;
 
         self.svc
-            .update(payload)
+            .update(&code, payload)
             .await
             .map_err(ProtoConvert::status)?;
         Ok(Response::new(()))
