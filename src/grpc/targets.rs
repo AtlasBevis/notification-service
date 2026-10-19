@@ -5,10 +5,10 @@ use tonic::{Request, Response, Status};
 use super::convert::ProtoConvert;
 use super::pb::targets_server::Targets;
 use super::pb::{
-    CodeRequest, CreateTargetRequest as CreateTargetRpcRequest,
+    CodeRequest, CreateTargetRequest as CreateTargetRpcRequest, PageRequest as PageRpcRequest,
     PatchMetadataRequest as PatchMetadataRpcRequest, Target, TargetList,
 };
-use crate::models::{CreateTargetRequest, PatchMetadataRequest, TargetData};
+use crate::models::{CreateTargetRequest, PageRequest, PatchMetadataRequest, TargetData};
 use crate::services::TargetTrait;
 
 /// gRPC counterpart of `TargetController`.
@@ -37,8 +37,19 @@ impl TargetGrpc {
 
 #[tonic::async_trait]
 impl Targets for TargetGrpc {
-    async fn list_targets(&self, _request: Request<()>) -> Result<Response<TargetList>, Status> {
-        let data = self.svc.list().await.map_err(ProtoConvert::status)?;
+    async fn list_targets(
+        &self,
+        request: Request<PageRpcRequest>,
+    ) -> Result<Response<TargetList>, Status> {
+        let request = request.into_inner();
+        let mut page = PageRequest {
+            page: request.page,
+            size: request.size,
+        };
+        page.normalize();
+        page.validate().map_err(ProtoConvert::status)?;
+
+        let data = self.svc.list(page).await.map_err(ProtoConvert::status)?;
         Ok(Response::new(TargetList {
             total: data.total,
             items: data.items.into_iter().map(Self::to_reply).collect(),

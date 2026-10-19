@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::models::{ApiRequest, ApiResponse, DefinitionData, PageData, SaveDefinitionRequest};
+use crate::models::{
+    ApiQuery, ApiRequest, ApiResponse, DefinitionData, PageData, PageRequest, SaveDefinitionRequest,
+};
 use crate::services::DefinitionTrait;
 use axum::extract::{Path, State};
 
@@ -15,8 +17,14 @@ impl DefinitionController {
 
     pub async fn list_definitions(
         State(this): State<Arc<Self>>,
+        ApiQuery(mut page): ApiQuery<PageRequest>,
     ) -> ApiResponse<PageData<DefinitionData>> {
-        match this.svc.list().await {
+        page.normalize();
+        if let Err(err) = page.validate() {
+            return err.to_response();
+        }
+
+        match this.svc.list(page).await {
             Ok(data) => ApiResponse::success(data),
             Err(err) => err.to_response(),
         }

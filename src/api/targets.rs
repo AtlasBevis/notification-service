@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::models::{
-    ApiRequest, ApiResponse, CreateTargetRequest, PageData, PatchMetadataRequest, TargetData,
+    ApiQuery, ApiRequest, ApiResponse, CreateTargetRequest, PageData, PageRequest,
+    PatchMetadataRequest, TargetData,
 };
 use crate::services::TargetTrait;
 use axum::extract::{Path, State};
@@ -15,8 +16,16 @@ impl TargetController {
         Self { svc: svc }
     }
 
-    pub async fn list_targets(State(this): State<Arc<Self>>) -> ApiResponse<PageData<TargetData>> {
-        match this.svc.list().await {
+    pub async fn list_targets(
+        State(this): State<Arc<Self>>,
+        ApiQuery(mut page): ApiQuery<PageRequest>,
+    ) -> ApiResponse<PageData<TargetData>> {
+        page.normalize();
+        if let Err(err) = page.validate() {
+            return err.to_response();
+        }
+
+        match this.svc.list(page).await {
             Ok(data) => ApiResponse::success(data),
             Err(err) => err.to_response(),
         }

@@ -1,6 +1,7 @@
 use axum::async_trait;
 use axum::extract::rejection::JsonRejection;
-use axum::extract::{FromRequest, Request};
+use axum::extract::{FromRequest, FromRequestParts, Query, Request};
+use axum::http::request::Parts;
 use axum::Json;
 use serde::de::DeserializeOwned;
 
@@ -34,5 +35,27 @@ fn json_error(err: &JsonRejection) -> String {
             "Content-Type must be application/json".to_string()
         }
         _ => err.body_text(),
+    }
+}
+
+/// Query-string extractor. Deserialize fail → 400 `ApiResponse` (handler is not called).
+pub struct ApiQuery<T>(pub T);
+
+#[async_trait]
+impl<S, T> FromRequestParts<S> for ApiQuery<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = ApiResponse<()>;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        match Query::<T>::from_request_parts(parts, state).await {
+            Ok(Query(value)) => Ok(ApiQuery(value)),
+            Err(err) => Err(ApiResponse::bad_request(format!(
+                "Invalid query: {}",
+                err.body_text()
+            ))),
+        }
     }
 }

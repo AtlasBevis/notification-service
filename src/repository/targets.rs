@@ -1,3 +1,4 @@
+use crate::models::{PageData, PageRequest};
 use crate::utils::TimeUtils;
 use deadpool_postgres::Pool;
 use serde_json::Value;
@@ -19,8 +20,18 @@ impl TargetsRepository {
         Self { pool }
     }
 
-    pub async fn list(&self) -> AppResult<Vec<TargetData>> {
+    pub async fn list_page(&self, page: &PageRequest) -> AppResult<PageData<TargetData>> {
         let client = self.pool.get().await?;
+        let total: i64 = client
+            .query_one(
+                r#"
+                SELECT COUNT(*)
+                FROM targets
+                "#,
+                &[],
+            )
+            .await?
+            .get(0);
         let rows = client
             .query(
                 r#"
@@ -29,11 +40,17 @@ impl TargetsRepository {
                 FROM targets t
                 JOIN channels c ON c.id = t.channel_id
                 ORDER BY t.code
+                LIMIT $1
+                OFFSET $2
                 "#,
-                &[],
+                &[&page.limit(), &page.offset()],
             )
             .await?;
-        rows.iter().map(TargetData::map_row).collect()
+        let items = rows
+            .iter()
+            .map(TargetData::map_row)
+            .collect::<AppResult<Vec<_>>>()?;
+        Ok(PageData::new(items, total))
     }
 
     pub async fn find_by_code(&self, code: &str) -> AppResult<TargetData> {

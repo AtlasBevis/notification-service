@@ -57,8 +57,14 @@ message PatchMetadataRequest {
 // /notification/sources
 // ---------------------------------------------------------------------------
 
+// Paging for every List* RPC. 0 / unset uses the default (page 1, size 20); size is at most 100.
+message PageRequest {
+  uint32 page = 1;
+  uint32 size = 2;
+}
+
 service Sources {
-  rpc ListSources(google.protobuf.Empty) returns (SourceList);
+  rpc ListSources(PageRequest) returns (SourceList);
   rpc GetSource(CodeRequest) returns (Source);
   rpc CreateSource(CreateSourceRequest) returns (google.protobuf.Empty);
   rpc PatchSourceMetadata(PatchMetadataRequest) returns (google.protobuf.Empty);
@@ -90,7 +96,7 @@ message CreateSourceRequest {
 // ---------------------------------------------------------------------------
 
 service Targets {
-  rpc ListTargets(google.protobuf.Empty) returns (TargetList);
+  rpc ListTargets(PageRequest) returns (TargetList);
   rpc GetTarget(CodeRequest) returns (Target);
   rpc CreateTarget(CreateTargetRequest) returns (google.protobuf.Empty);
   rpc PatchTargetMetadata(PatchMetadataRequest) returns (google.protobuf.Empty);
@@ -156,7 +162,7 @@ message SaveTemplateRequest {
 // ---------------------------------------------------------------------------
 
 service Definitions {
-  rpc ListDefinitions(google.protobuf.Empty) returns (DefinitionList);
+  rpc ListDefinitions(PageRequest) returns (DefinitionList);
   rpc GetDefinition(CodeRequest) returns (Definition);
   rpc CreateDefinition(SaveDefinitionRequest) returns (Definition);
   // `code` selects the definition to replace.
@@ -211,7 +217,7 @@ message DefinitionTargetRequest {
 // ---------------------------------------------------------------------------
 
 service Webhooks {
-  rpc ListWebhooks(google.protobuf.Empty) returns (WebhookList);
+  rpc ListWebhooks(PageRequest) returns (WebhookList);
   rpc GetWebhook(CodeRequest) returns (Webhook);
   rpc CreateWebhook(SaveWebhookRequest) returns (Webhook);
   // `target_code` selects the webhook to replace.

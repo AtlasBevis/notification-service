@@ -5,11 +5,12 @@ use tonic::{Request, Response, Status};
 use super::convert::ProtoConvert;
 use super::pb::webhooks_server::Webhooks;
 use super::pb::{
-    CodeRequest, SaveWebhookAuthRequest as SaveWebhookAuthRpcRequest,
+    CodeRequest, PageRequest as PageRpcRequest,
+    SaveWebhookAuthRequest as SaveWebhookAuthRpcRequest,
     SaveWebhookRequest as SaveWebhookRpcRequest, Webhook, WebhookAuth, WebhookList,
 };
 use crate::error::{AppError, AppResult};
-use crate::models::{SaveWebhookAuthRequest, SaveWebhookRequest, WebhookData};
+use crate::models::{PageRequest, SaveWebhookAuthRequest, SaveWebhookRequest, WebhookData};
 use crate::services::WebhookServiceTrait;
 
 /// gRPC counterpart of `WebhookController`; webhooks are addressed by target code.
@@ -115,8 +116,19 @@ impl WebhookGrpc {
 
 #[tonic::async_trait]
 impl Webhooks for WebhookGrpc {
-    async fn list_webhooks(&self, _request: Request<()>) -> Result<Response<WebhookList>, Status> {
-        let data = self.svc.list().await.map_err(ProtoConvert::status)?;
+    async fn list_webhooks(
+        &self,
+        request: Request<PageRpcRequest>,
+    ) -> Result<Response<WebhookList>, Status> {
+        let request = request.into_inner();
+        let mut page = PageRequest {
+            page: request.page,
+            size: request.size,
+        };
+        page.normalize();
+        page.validate().map_err(ProtoConvert::status)?;
+
+        let data = self.svc.list(page).await.map_err(ProtoConvert::status)?;
         Ok(Response::new(WebhookList {
             total: data.total,
             items: data.items.into_iter().map(Self::to_reply).collect(),

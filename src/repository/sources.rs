@@ -1,3 +1,4 @@
+use crate::models::{PageData, PageRequest};
 use crate::utils::TimeUtils;
 use deadpool_postgres::Pool;
 use serde_json::Value;
@@ -29,6 +30,37 @@ impl SourceRepository {
             )
             .await?;
         rows.iter().map(SourceData::map_row).collect()
+    }
+
+    pub async fn list_page(&self, page: &PageRequest) -> AppResult<PageData<SourceData>> {
+        let client = self.pool.get().await?;
+        let total: i64 = client
+            .query_one(
+                r#"
+                SELECT COUNT(*)
+                FROM sources
+                "#,
+                &[],
+            )
+            .await?
+            .get(0);
+        let rows = client
+            .query(
+                r#"
+                SELECT id, code, name, status, metadata, created_at, updated_at
+                FROM sources
+                ORDER BY code
+                LIMIT $1
+                OFFSET $2
+                "#,
+                &[&page.limit(), &page.offset()],
+            )
+            .await?;
+        let items = rows
+            .iter()
+            .map(SourceData::map_row)
+            .collect::<AppResult<Vec<_>>>()?;
+        Ok(PageData::new(items, total))
     }
 
     pub async fn find_by_code(&self, code: &str) -> AppResult<SourceData> {

@@ -13,7 +13,7 @@ mod webhook;
 pub mod api_request;
 pub mod api_response;
 
-pub use api_request::ApiRequest;
+pub use api_request::{ApiQuery, ApiRequest};
 pub use api_response::ApiResponse;
 pub use channel::ChannelData;
 pub use definition::{
@@ -22,7 +22,7 @@ pub use definition::{
 pub use notification::{AcceptedNotification, DeliveryDraft};
 pub use notify_msg::{NotifyMessage, NotifyValue, TargetPayload};
 pub use notify_request::NotifyRequest;
-pub use page::PageData;
+pub use page::{PageData, PageRequest};
 pub use source::{CreateSourceRequest, PatchMetadataRequest, SourceData};
 pub use target::{CreateTargetRequest, Recipients, TargetData};
 pub use template::{SaveTemplateRequest, TemplateData};

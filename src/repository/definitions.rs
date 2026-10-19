@@ -1,25 +1,10 @@
+use crate::models::{PageData, PageRequest};
 use crate::utils::TimeUtils;
 use deadpool_postgres::{Pool, Transaction};
 
 use crate::enums::{Level, Status};
 use crate::error::{AppError, AppResult};
 use crate::models::{DefinitionData, DefinitionTarget, SaveDefinitionRequest};
-
-const COLUMNS: &str = r#"
-    d.id, d.code, d.name, d.status, d.description, d.level,
-    d.source_id, d.channel_id, d.created_at, d.updated_at,
-    (
-        SELECT COALESCE(
-            jsonb_agg(
-                jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id)
-                ORDER BY dt.id
-            ),
-            '[]'::jsonb
-        )
-        FROM definition_targets dt
-        WHERE dt.definition_id = d.id
-    ) AS targets
-"#;
 
 #[derive(Clone)]
 pub struct DefinitionRepository {
@@ -33,14 +18,24 @@ impl DefinitionRepository {
 
     pub async fn find_by_code(&self, code: &str) -> AppResult<DefinitionData> {
         let client = self.pool.get().await?;
-        let sql = format!(
-            r#"
-            SELECT {COLUMNS}
+        let sql = r#"
+            SELECT d.id, d.code, d.name, d.status, d.description, d.level,
+                   d.source_id, d.channel_id, d.created_at, d.updated_at,
+                   (
+                       SELECT COALESCE(
+                           jsonb_agg(
+                               jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id)
+                               ORDER BY dt.id
+                           ),
+                           '[]'::jsonb
+                       )
+                       FROM definition_targets dt
+                       WHERE dt.definition_id = d.id
+                   ) AS targets
             FROM definitions d
             WHERE d.code = $1
-            "#
-        );
-        match client.query_opt(sql.as_str(), &[&code]).await? {
+            "#;
+        match client.query_opt(sql, &[&code]).await? {
             Some(row) => DefinitionData::map_row(&row),
             None => Err(AppError::not_found(format!("code {code} not found"))),
         }
@@ -48,30 +43,70 @@ impl DefinitionRepository {
 
     pub async fn find_by_id(&self, id: i64) -> AppResult<DefinitionData> {
         let client = self.pool.get().await?;
-        let sql = format!(
-            r#"
-            SELECT {COLUMNS}
+        let sql = r#"
+            SELECT d.id, d.code, d.name, d.status, d.description, d.level,
+                   d.source_id, d.channel_id, d.created_at, d.updated_at,
+                   (
+                       SELECT COALESCE(
+                           jsonb_agg(
+                               jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id)
+                               ORDER BY dt.id
+                           ),
+                           '[]'::jsonb
+                       )
+                       FROM definition_targets dt
+                       WHERE dt.definition_id = d.id
+                   ) AS targets
             FROM definitions d
             WHERE d.id = $1
-            "#
-        );
-        match client.query_opt(sql.as_str(), &[&id]).await? {
+            "#;
+        match client.query_opt(sql, &[&id]).await? {
             Some(row) => DefinitionData::map_row(&row),
             None => Err(AppError::not_found(format!("id {id} not found"))),
         }
     }
 
-    pub async fn list(&self) -> AppResult<Vec<DefinitionData>> {
+    pub async fn list_page(&self, page: &PageRequest) -> AppResult<PageData<DefinitionData>> {
         let client = self.pool.get().await?;
-        let sql = format!(
-            r#"
-            SELECT {COLUMNS}
-            FROM definitions d
-            ORDER BY d.code
-            "#
-        );
-        let rows = client.query(sql.as_str(), &[]).await?;
-        rows.iter().map(DefinitionData::map_row).collect()
+        let total: i64 = client
+            .query_one(
+                r#"
+                SELECT COUNT(*)
+                FROM definitions
+                "#,
+                &[],
+            )
+            .await?
+            .get(0);
+        let rows = client
+            .query(
+                r#"
+                SELECT d.id, d.code, d.name, d.status, d.description, d.level,
+                       d.source_id, d.channel_id, d.created_at, d.updated_at,
+                       (
+                           SELECT COALESCE(
+                               jsonb_agg(
+                                   jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id)
+                                   ORDER BY dt.id
+                               ),
+                               '[]'::jsonb
+                           )
+                           FROM definition_targets dt
+                           WHERE dt.definition_id = d.id
+                       ) AS targets
+                FROM definitions d
+                ORDER BY d.code
+                LIMIT $1
+                OFFSET $2
+                "#,
+                &[&page.limit(), &page.offset()],
+            )
+            .await?;
+        let items = rows
+            .iter()
+            .map(DefinitionData::map_row)
+            .collect::<AppResult<Vec<_>>>()?;
+        Ok(PageData::new(items, total))
     }
 
     pub async fn insert(
@@ -104,8 +139,8 @@ impl DefinitionRepository {
             .await?;
         let id: i64 = row.get("id");
 
-        insert_targets(&tx, id, targets).await?;
-        let data = find_in_tx(&tx, id).await?;
+        Self::insert_targets(&tx, id, targets).await?;
+        let data = Self::find_in_tx(&tx, id).await?;
         tx.commit().await?;
         Ok(data)
     }
@@ -159,8 +194,8 @@ impl DefinitionRepository {
             &[&id],
         )
         .await?;
-        insert_targets(&tx, id, targets).await?;
-        let data = find_in_tx(&tx, id).await?;
+        Self::insert_targets(&tx, id, targets).await?;
+        let data = Self::find_in_tx(&tx, id).await?;
         tx.commit().await?;
         Ok(data)
     }
@@ -183,38 +218,48 @@ impl DefinitionRepository {
         }
         Ok(())
     }
-}
 
-/// Inserts in slice order: `definition_targets.id` order decides which
-/// template EMAIL / MSTEAMS render.
-async fn insert_targets(
-    tx: &Transaction<'_>,
-    definition_id: i64,
-    targets: &[DefinitionTarget],
-) -> AppResult<()> {
-    let target_ids: Vec<i32> = targets.iter().map(|t| t.target_id).collect();
-    let template_ids: Vec<Option<i32>> = targets.iter().map(|t| t.template_id).collect();
-    tx.execute(
-        r#"
-        INSERT INTO definition_targets (definition_id, target_id, template_id)
-        SELECT $1, t.target_id, t.template_id
-        FROM unnest($2::int[], $3::int[]) WITH ORDINALITY AS t (target_id, template_id, ord)
-        ORDER BY t.ord
-        "#,
-        &[&definition_id, &target_ids, &template_ids],
-    )
-    .await?;
-    Ok(())
-}
+    /// Inserts in slice order: `definition_targets.id` order decides which
+    /// template EMAIL / MSTEAMS render.
+    async fn insert_targets(
+        tx: &Transaction<'_>,
+        definition_id: i64,
+        targets: &[DefinitionTarget],
+    ) -> AppResult<()> {
+        let target_ids: Vec<i32> = targets.iter().map(|t| t.target_id).collect();
+        let template_ids: Vec<Option<i32>> = targets.iter().map(|t| t.template_id).collect();
+        tx.execute(
+            r#"
+            INSERT INTO definition_targets (definition_id, target_id, template_id)
+            SELECT $1, t.target_id, t.template_id
+            FROM unnest($2::int[], $3::int[]) WITH ORDINALITY AS t (target_id, template_id, ord)
+            ORDER BY t.ord
+            "#,
+            &[&definition_id, &target_ids, &template_ids],
+        )
+        .await?;
+        Ok(())
+    }
 
-async fn find_in_tx(tx: &Transaction<'_>, id: i64) -> AppResult<DefinitionData> {
-    let sql = format!(
-        r#"
-        SELECT {COLUMNS}
-        FROM definitions d
-        WHERE d.id = $1
-        "#
-    );
-    let row = tx.query_one(sql.as_str(), &[&id]).await?;
-    DefinitionData::map_row(&row)
+    async fn find_in_tx(tx: &Transaction<'_>, id: i64) -> AppResult<DefinitionData> {
+        let sql = r#"
+            SELECT d.id, d.code, d.name, d.status, d.description, d.level,
+                   d.source_id, d.channel_id, d.created_at, d.updated_at,
+                   (
+                       SELECT COALESCE(
+                           jsonb_agg(
+                               jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id)
+                               ORDER BY dt.id
+                           ),
+                           '[]'::jsonb
+                       )
+                       FROM definition_targets dt
+                       WHERE dt.definition_id = d.id
+                   ) AS targets
+            FROM definitions d
+            WHERE d.id = $1
+            "#;
+        let row = tx.query_one(sql, &[&id]).await?;
+        DefinitionData::map_row(&row)
+    }
 }

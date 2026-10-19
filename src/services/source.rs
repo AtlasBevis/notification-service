@@ -5,13 +5,13 @@ use tokio::sync::RwLock;
 
 use crate::enums::Status;
 use crate::error::{AppError, AppResult};
-use crate::models::{CreateSourceRequest, PageData, PatchMetadataRequest, SourceData};
+use crate::models::{CreateSourceRequest, PageData, PageRequest, PatchMetadataRequest, SourceData};
 use crate::repository::SourceRepository;
 
 #[async_trait]
 pub trait SourceTrait: Send + Sync {
     async fn load(&self) -> AppResult<()>;
-    async fn list(&self) -> AppResult<PageData<SourceData>>;
+    async fn list(&self, page: PageRequest) -> AppResult<PageData<SourceData>>;
     async fn get(&self, code: &str) -> Option<SourceData>;
     async fn get_by_code(&self, code: &str) -> AppResult<SourceData>;
     async fn get_active_by_code(&self, code: &str) -> AppResult<SourceData>;
@@ -49,8 +49,8 @@ impl SourceTrait for SourceService {
         Ok(())
     }
 
-    async fn list(&self) -> AppResult<PageData<SourceData>> {
-        Ok(PageData::new(self.repo.list().await?))
+    async fn list(&self, page: PageRequest) -> AppResult<PageData<SourceData>> {
+        self.repo.list_page(&page).await
     }
 
     async fn get(&self, code: &str) -> Option<SourceData> {

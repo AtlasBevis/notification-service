@@ -1,3 +1,4 @@
+use crate::models::{PageData, PageRequest};
 use deadpool_postgres::{GenericClient, Pool};
 use serde_json::Value;
 
@@ -105,14 +106,25 @@ impl WebhookRepository {
     }
 
     /// All webhook configs with their auth config, ordered by target code.
-    pub async fn list(&self) -> AppResult<Vec<WebhookData>> {
+    pub async fn list_page(&self, page: &PageRequest) -> AppResult<PageData<WebhookData>> {
         let client = self.pool.get().await?;
-        Self::select(&client, None).await
+        let total: i64 = client
+            .query_one(
+                r#"
+                SELECT COUNT(*)
+                FROM webhook_configs
+                "#,
+                &[],
+            )
+            .await?
+            .get(0);
+        let items = Self::select(&client, None, Some(page.limit()), page.offset()).await?;
+        Ok(PageData::new(items, total))
     }
 
     pub async fn find_by_target_code(&self, target_code: &str) -> AppResult<WebhookData> {
         let client = self.pool.get().await?;
-        Self::select(&client, Some(target_code))
+        Self::select(&client, Some(target_code), None, 0)
             .await?
             .into_iter()
             .next()
@@ -148,7 +160,7 @@ impl WebhookRepository {
         let config_id: i32 = row.get("id");
         Self::upsert_auth(&tx, config_id, req).await?;
 
-        let data = Self::select(&tx, Some(&req.target_code))
+        let data = Self::select(&tx, Some(&req.target_code), None, 0)
             .await?
             .into_iter()
             .next()
@@ -197,7 +209,7 @@ impl WebhookRepository {
         let config_id: i32 = row.get("id");
         Self::upsert_auth(&tx, config_id, req).await?;
 
-        let data = Self::select(&tx, Some(&req.target_code))
+        let data = Self::select(&tx, Some(&req.target_code), None, 0)
             .await?
             .into_iter()
             .next()
@@ -284,6 +296,8 @@ impl WebhookRepository {
     async fn select(
         client: &impl GenericClient,
         target_code: Option<&str>,
+        limit: Option<i64>,
+        offset: i64,
     ) -> AppResult<Vec<WebhookData>> {
         let rows = client
             .query(
@@ -320,8 +334,10 @@ impl WebhookRepository {
                 WHERE $1::text IS NULL
                     OR t.code = $1
                 ORDER BY t.code
+                LIMIT $2
+                OFFSET $3
                 "#,
-                &[&target_code],
+                &[&target_code, &limit, &offset],
             )
             .await?;
         rows.iter().map(WebhookData::map_row).collect()

@@ -224,12 +224,12 @@ Webhook method and timeout come from `webhook_configs`. Each webhook delivery ca
 | `PUT` | `/notification/webhooks/{target_code}` | Replace a webhook config and its auth config |
 | `DELETE` | `/notification/webhooks/{target_code}` | Delete a webhook config and its auth config |
 
-Every list route (`GET /sources`, `/targets`, `/definitions`, `/webhooks`) returns all rows ordered by `code` as a `PageData` (`src/models/page.rs`) in `data`:
+Every list route (`GET /sources`, `/targets`, `/definitions`, `/webhooks`) is paged with `?page=&size=` (`PageRequest`, `src/models/page.rs`): `page` and `size` are unsigned (`u32`); missing or `0` takes the default (page 1, size 20), and `size` above 100 is `400`. Rows are ordered by `code`, and `data` is a `PageData`, where `total` is the row count before paging:
 
 ```json
-{ "items": [ ... ], "total": 2 }
+{ "items": [ ... ], "total": 42 }
 ```
 
-The matching gRPC `*List` messages carry the same `items` and `total`.
+The matching gRPC `List*` RPCs take a `PageRequest` message (`uint32 page`, `uint32 size`, same defaults and limits) and return `items` and `total`.
 
 All `/notification` routes require `api-key` authentication. Notification CRUD routes are not provided.

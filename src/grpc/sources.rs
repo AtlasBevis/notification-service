@@ -5,10 +5,10 @@ use tonic::{Request, Response, Status};
 use super::convert::ProtoConvert;
 use super::pb::sources_server::Sources;
 use super::pb::{
-    CodeRequest, CreateSourceRequest as CreateSourceRpcRequest,
+    CodeRequest, CreateSourceRequest as CreateSourceRpcRequest, PageRequest as PageRpcRequest,
     PatchMetadataRequest as PatchMetadataRpcRequest, Source, SourceList,
 };
-use crate::models::{CreateSourceRequest, PatchMetadataRequest, SourceData};
+use crate::models::{CreateSourceRequest, PageRequest, PatchMetadataRequest, SourceData};
 use crate::services::SourceTrait;
 
 /// gRPC counterpart of `SourceController`.
@@ -36,8 +36,19 @@ impl SourceGrpc {
 
 #[tonic::async_trait]
 impl Sources for SourceGrpc {
-    async fn list_sources(&self, _request: Request<()>) -> Result<Response<SourceList>, Status> {
-        let data = self.svc.list().await.map_err(ProtoConvert::status)?;
+    async fn list_sources(
+        &self,
+        request: Request<PageRpcRequest>,
+    ) -> Result<Response<SourceList>, Status> {
+        let request = request.into_inner();
+        let mut page = PageRequest {
+            page: request.page,
+            size: request.size,
+        };
+        page.normalize();
+        page.validate().map_err(ProtoConvert::status)?;
+
+        let data = self.svc.list(page).await.map_err(ProtoConvert::status)?;
         Ok(Response::new(SourceList {
             total: data.total,
             items: data.items.into_iter().map(Self::to_reply).collect(),

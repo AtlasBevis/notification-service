@@ -5,10 +5,10 @@ use tonic::{Request, Response, Status};
 use super::convert::ProtoConvert;
 use super::pb::definitions_server::Definitions;
 use super::pb::{
-    CodeRequest, Definition, DefinitionList, DefinitionTarget,
+    CodeRequest, Definition, DefinitionList, DefinitionTarget, PageRequest as PageRpcRequest,
     SaveDefinitionRequest as SaveDefinitionRpcRequest,
 };
-use crate::models::{DefinitionData, DefinitionTargetRequest, SaveDefinitionRequest};
+use crate::models::{DefinitionData, DefinitionTargetRequest, PageRequest, SaveDefinitionRequest};
 use crate::services::DefinitionTrait;
 
 /// gRPC counterpart of `DefinitionController`.
@@ -69,9 +69,17 @@ impl DefinitionGrpc {
 impl Definitions for DefinitionGrpc {
     async fn list_definitions(
         &self,
-        _request: Request<()>,
+        request: Request<PageRpcRequest>,
     ) -> Result<Response<DefinitionList>, Status> {
-        let data = self.svc.list().await.map_err(ProtoConvert::status)?;
+        let request = request.into_inner();
+        let mut page = PageRequest {
+            page: request.page,
+            size: request.size,
+        };
+        page.normalize();
+        page.validate().map_err(ProtoConvert::status)?;
+
+        let data = self.svc.list(page).await.map_err(ProtoConvert::status)?;
         Ok(Response::new(DefinitionList {
             total: data.total,
             items: data.items.into_iter().map(Self::to_reply).collect(),

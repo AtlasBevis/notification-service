@@ -13,8 +13,8 @@ use crate::enums::Method as ConfiguredMethod;
 use crate::error::{AppError, AppResult};
 use crate::infras::http::HttpClient;
 use crate::models::{
-    DefinitionData, NotifyValue, PageData, SaveWebhookRequest, TokenBodyFormat, WebhookAuthConfig,
-    WebhookAuthMode, WebhookConfig, WebhookData, WebhookPayload,
+    DefinitionData, NotifyValue, PageData, PageRequest, SaveWebhookRequest, TokenBodyFormat,
+    WebhookAuthConfig, WebhookAuthMode, WebhookConfig, WebhookData, WebhookPayload,
 };
 use crate::repository::WebhookRepository;
 use crate::services::TargetTrait;
@@ -32,7 +32,7 @@ pub trait WebhookServiceTrait: Send + Sync {
     ) -> AppResult<WebhookAuthConfig>;
     async fn max_attempts(&self, definition_id: i64) -> AppResult<u32>;
     async fn send_webhook(&self, request: &NotifyValue) -> AppResult<()>;
-    async fn list(&self) -> AppResult<PageData<WebhookData>>;
+    async fn list(&self, page: PageRequest) -> AppResult<PageData<WebhookData>>;
     async fn get_by_target_code(&self, target_code: &str) -> AppResult<WebhookData>;
     async fn create(&self, req: SaveWebhookRequest) -> AppResult<WebhookData>;
     async fn update(&self, req: SaveWebhookRequest) -> AppResult<WebhookData>;
@@ -512,8 +512,8 @@ impl WebhookServiceTrait for WebhookService {
         }
     }
 
-    async fn list(&self) -> AppResult<PageData<WebhookData>> {
-        Ok(PageData::new(self.repo.list().await?))
+    async fn list(&self, page: PageRequest) -> AppResult<PageData<WebhookData>> {
+        self.repo.list_page(&page).await
     }
 
     async fn get_by_target_code(&self, target_code: &str) -> AppResult<WebhookData> {

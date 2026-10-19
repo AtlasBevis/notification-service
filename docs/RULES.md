@@ -20,7 +20,7 @@ Coding rules for this repository. `CLAUDE.md` imports this file; what the servic
 
 - Each API domain is one controller struct in `src/api/<domain>.rs` (`DefinitionController`, `SourceController`, ...). It holds the service traits it needs and has a `new(...)` constructor.
 - Handlers are associated functions on the controller. They take the controller as axum state, `State(this): State<Arc<Self>>`, and call `this.svc`. Do not write free handler functions, and do not take `State<SharedState>` in a handler.
-- A list handler returns `ApiResponse<PageData<T>>`; the service builds it with `PageData::new(items)`. Do not return a bare `Vec<T>` from a list API.
+- A list handler takes `ApiQuery(mut page): ApiQuery<PageRequest>`, calls `page.normalize()` and `page.validate()`, and returns `ApiResponse<PageData<T>>`. The repository's `list_page(&PageRequest)` applies `LIMIT/OFFSET`, counts `total`, and builds `PageData::new(items, total, page)`. Do not return a bare `Vec<T>` from a list API, and do not hard-code page limits outside `PageRequest`.
 - Handlers return only `ApiResponse` / `ApiResponse<T>`, never `AppResult<...>`. Convert an error with `err.to_response()`.
 - Re-export the controller from `src/api/mod.rs`, build it in `bootstrap/build.rs`, and store it in `AppState` as `Arc<XxxController>`.
 - Register routes in `src/api/routes.rs` with one function per controller that ends in `.with_state(controller)`, nested in `protected_routes()` unless the endpoint must be public like `/health`.
