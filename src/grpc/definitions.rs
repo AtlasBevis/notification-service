@@ -32,9 +32,9 @@ impl DefinitionGrpc {
             code: request.code,
             name: request.name,
             description: request.description,
-            status: request.status,
-            level: request.level,
-            source_code: request.source_code,
+            status: ProtoConvert::record_status(&request.status)?,
+            level: ProtoConvert::level(&request.level)?,
+            source: request.source,
             channel: ProtoConvert::channel(&request.channel_code)?,
             targets: Self::to_targets(request.targets),
         })
@@ -48,7 +48,7 @@ impl DefinitionGrpc {
             description: request.description,
             status: request.status,
             level: request.level,
-            source_code: request.source_code,
+            source: request.source,
             channel: ProtoConvert::channel(&request.channel_code)?,
             targets: Self::to_targets(request.targets),
         };
@@ -59,8 +59,8 @@ impl DefinitionGrpc {
         targets
             .into_iter()
             .map(|t| DefinitionTargetRequest {
-                target_code: t.target_code,
-                template_id: t.template_id,
+                code: t.code,
+                template_code: t.template_code,
             })
             .collect()
     }
@@ -79,8 +79,8 @@ impl DefinitionGrpc {
                 .targets
                 .into_iter()
                 .map(|t| DefinitionTarget {
-                    target_id: t.target_id,
-                    template_id: t.template_id,
+                    code: t.code,
+                    template_code: t.template_code,
                 })
                 .collect(),
             created_at: Some(ProtoConvert::timestamp(data.created_at)),

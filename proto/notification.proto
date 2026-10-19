@@ -193,8 +193,9 @@ message Definition {
 }
 
 message DefinitionTarget {
-  int32 target_id = 1;
-  optional int32 template_id = 2;
+  reserved 1, 2; // were target_id / template_id
+  string code = 3;
+  optional string template_code = 4;
 }
 
 message DefinitionList {
@@ -206,10 +207,12 @@ message CreateDefinitionRequest {
   string code = 1;
   string name = 2;
   optional string description = 3;
-  // Defaults to ACTIVE / INFO when omitted.
-  optional string status = 4;
-  optional string level = 5;
-  string source_code = 6;
+  // ACTIVE / INACTIVE.
+  string status = 4;
+  // INFO / WARN / ERROR / CRITICAL.
+  string level = 5;
+  // Source code.
+  string source = 6;
   string channel_code = 7;
   // Replaces the linked targets, in this order.
   repeated DefinitionTargetRequest targets = 8;
@@ -222,15 +225,18 @@ message PutDefinitionRequest {
   // Keeps the stored value when omitted.
   optional string status = 4;
   optional string level = 5;
-  string source_code = 6;
+  // Source code.
+  string source = 6;
   string channel_code = 7;
   // Replaces the linked targets, in this order.
   repeated DefinitionTargetRequest targets = 8;
 }
 
 message DefinitionTargetRequest {
-  string target_code = 1;
-  optional int32 template_id = 2;
+  // Target code.
+  string code = 1;
+  reserved 2; // was template_id
+  optional string template_code = 3;
 }
 
 // ---------------------------------------------------------------------------

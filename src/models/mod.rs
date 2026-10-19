@@ -17,15 +17,17 @@ pub use api_request::{ApiQuery, ApiRequest};
 pub use api_response::ApiResponse;
 pub use channel::ChannelData;
 pub use definition::{
-    CreateDefinitionRequest, DefinitionData, DefinitionTarget, DefinitionTargetRequest,
-    PutDefinitionRequest,
+    CreateDefinitionRequest, DefinitionData, DefinitionInternal, DefinitionTargetDataInternal,
+    DefinitionTargetRequest, PutDefinitionRequest,
 };
 pub use notification::{AcceptedNotification, DeliveryDraft};
 pub use notify_msg::{NotifyMessage, NotifyValue, TargetPayload};
 pub use notify_request::NotifyRequest;
 pub use page::{PageData, PageRequest};
 pub use source::{CreateSourceRequest, PutSourceRequest, SourceData};
-pub use target::{CreateTargetRequest, PutTargetRequest, Recipients, TargetData};
+pub use target::{
+    CreateTargetRequest, PutTargetRequest, Recipients, TargetData, TargetInternalData,
+};
 pub use template::{SaveTemplateRequest, TemplateData};
 pub use webhook::{
     SaveWebhookAuthRequest, SaveWebhookRequest, TokenBodyFormat, WebhookAuthConfig,

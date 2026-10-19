@@ -56,6 +56,39 @@ impl TemplateRepository {
         TemplateData::map_row(&row)
     }
 
+    /// Every template in `ids` with its latest ACTIVE version, in one query.
+    /// Ids without an ACTIVE version are missing from the result.
+    pub async fn find_by_ids(&self, ids: &[i32]) -> AppResult<Vec<TemplateData>> {
+        let client = self.pool.get().await?;
+        let rows = client
+            .query(
+                r#"
+                SELECT DISTINCT ON (t.id)
+                    t.id,
+                    t.code,
+                    t.name,
+                    t.status,
+                    t.created_at,
+                    t.updated_at,
+                    v.id AS version_id,
+                    v.version,
+                    v.status AS version_status,
+                    v.title,
+                    v.content,
+                    v.format
+                FROM templates t
+                JOIN template_versions v
+                    ON v.template_id = t.id
+                WHERE t.id = ANY($1)
+                    AND v.status = 'ACTIVE'
+                ORDER BY t.id, v.version DESC
+                "#,
+                &[&ids],
+            )
+            .await?;
+        rows.iter().map(TemplateData::map_row).collect()
+    }
+
     /// Template with its latest ACTIVE version.
     pub async fn find_by_code(&self, code: &str) -> AppResult<TemplateData> {
         let client = self.pool.get().await?;

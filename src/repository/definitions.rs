@@ -2,11 +2,8 @@ use crate::models::{PageData, PageRequest};
 use crate::utils::TimeUtils;
 use deadpool_postgres::{Pool, Transaction};
 
-use crate::enums::{Level, Status};
 use crate::error::{AppError, AppResult};
-use crate::models::{
-    CreateDefinitionRequest, DefinitionData, DefinitionTarget, PutDefinitionRequest,
-};
+use crate::models::{CreateDefinitionRequest, DefinitionData, PutDefinitionRequest};
 
 #[derive(Clone)]
 pub struct DefinitionRepository {
@@ -26,12 +23,14 @@ impl DefinitionRepository {
                    (
                        SELECT COALESCE(
                            jsonb_agg(
-                               jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id)
+                               jsonb_build_object('code', t.code, 'template_code', tp.code)
                                ORDER BY dt.id
                            ),
                            '[]'::jsonb
                        )
                        FROM definition_targets dt
+                       JOIN targets t ON t.id = dt.target_id
+                       LEFT JOIN templates tp ON tp.id = dt.template_id
                        WHERE dt.definition_id = d.id
                    ) AS targets
             FROM definitions d
@@ -51,12 +50,14 @@ impl DefinitionRepository {
                    (
                        SELECT COALESCE(
                            jsonb_agg(
-                               jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id)
+                               jsonb_build_object('code', t.code, 'template_code', tp.code)
                                ORDER BY dt.id
                            ),
                            '[]'::jsonb
                        )
                        FROM definition_targets dt
+                       JOIN targets t ON t.id = dt.target_id
+                       LEFT JOIN templates tp ON tp.id = dt.template_id
                        WHERE dt.definition_id = d.id
                    ) AS targets
             FROM definitions d
@@ -88,12 +89,14 @@ impl DefinitionRepository {
                        (
                            SELECT COALESCE(
                                jsonb_agg(
-                                   jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id)
+                                   jsonb_build_object('code', t.code, 'template_code', tp.code)
                                    ORDER BY dt.id
                                ),
                                '[]'::jsonb
                            )
                            FROM definition_targets dt
+                           JOIN targets t ON t.id = dt.target_id
+                           LEFT JOIN templates tp ON tp.id = dt.template_id
                            WHERE dt.definition_id = d.id
                        ) AS targets
                 FROM definitions d
@@ -116,7 +119,8 @@ impl DefinitionRepository {
         req: &CreateDefinitionRequest,
         source_id: i32,
         channel_id: i32,
-        targets: &[DefinitionTarget],
+        target_ids: &[i32],
+        template_ids: &[Option<i32>],
     ) -> AppResult<DefinitionData> {
         let mut client = self.pool.get().await?;
         let tx = client.transaction().await?;
@@ -132,8 +136,8 @@ impl DefinitionRepository {
                     &req.code,
                     &req.name,
                     &req.description,
-                    &req.status.as_deref().unwrap_or(Status::Active.as_str()),
-                    &req.level.as_deref().unwrap_or(Level::Info.as_str()),
+                    &req.status.as_str(),
+                    &req.level.as_str(),
                     &source_id,
                     &channel_id,
                 ],
@@ -141,7 +145,7 @@ impl DefinitionRepository {
             .await?;
         let id: i64 = row.get("id");
 
-        Self::insert_targets(&tx, id, targets).await?;
+        Self::insert_targets(&tx, id, target_ids, template_ids).await?;
         let data = Self::find_in_tx(&tx, id).await?;
         tx.commit().await?;
         Ok(data)
@@ -155,7 +159,8 @@ impl DefinitionRepository {
         req: &PutDefinitionRequest,
         source_id: i32,
         channel_id: i32,
-        targets: &[DefinitionTarget],
+        target_ids: &[i32],
+        template_ids: &[Option<i32>],
     ) -> AppResult<DefinitionData> {
         let mut client = self.pool.get().await?;
         let tx = client.transaction().await?;
@@ -197,7 +202,7 @@ impl DefinitionRepository {
             &[&id],
         )
         .await?;
-        Self::insert_targets(&tx, id, targets).await?;
+        Self::insert_targets(&tx, id, target_ids, template_ids).await?;
         let data = Self::find_in_tx(&tx, id).await?;
         tx.commit().await?;
         Ok(data)
@@ -222,15 +227,19 @@ impl DefinitionRepository {
         Ok(())
     }
 
-    /// Inserts in slice order: `definition_targets.id` order decides which
-    /// template EMAIL / MSTEAMS render.
+    /// Inserts `target_ids[i]` with `template_ids[i]`, in slice order:
+    /// `definition_targets.id` order decides which template EMAIL / MSTEAMS render.
     async fn insert_targets(
         tx: &Transaction<'_>,
         definition_id: i64,
-        targets: &[DefinitionTarget],
+        target_ids: &[i32],
+        template_ids: &[Option<i32>],
     ) -> AppResult<()> {
-        let target_ids: Vec<i32> = targets.iter().map(|t| t.target_id).collect();
-        let template_ids: Vec<Option<i32>> = targets.iter().map(|t| t.template_id).collect();
+        if target_ids.len() != template_ids.len() {
+            return Err(AppError::internal(
+                "definition target_ids and template_ids differ in length",
+            ));
+        }
         tx.execute(
             r#"
             INSERT INTO definition_targets (definition_id, target_id, template_id)
@@ -251,12 +260,14 @@ impl DefinitionRepository {
                    (
                        SELECT COALESCE(
                            jsonb_agg(
-                               jsonb_build_object('target_id', dt.target_id, 'template_id', dt.template_id)
+                               jsonb_build_object('code', t.code, 'template_code', tp.code)
                                ORDER BY dt.id
                            ),
                            '[]'::jsonb
                        )
                        FROM definition_targets dt
+                       JOIN targets t ON t.id = dt.target_id
+                       LEFT JOIN templates tp ON tp.id = dt.template_id
                        WHERE dt.definition_id = d.id
                    ) AS targets
             FROM definitions d

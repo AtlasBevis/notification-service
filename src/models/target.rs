@@ -35,6 +35,34 @@ impl TargetData {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct TargetInternalData {
+    pub id: i32,
+    pub code: String,
+    pub channel_id: i32,
+    pub name: String,
+    pub status: Status,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl TargetInternalData {
+    pub fn map_row(row: &tokio_postgres::Row) -> AppResult<Self> {
+        let status: String = row.get("status");
+        Ok(Self {
+            id: row.get("id"),
+            code: row.get("code"),
+            channel_id: row.get("channel_id"),
+            name: row.get("name"),
+            status: Status::parse(&status).ok_or_else(|| {
+                AppError::internal(format!("unknown status `{status}` in targets"))
+            })?,
+            created_at: row.get::<_, DateTime<Utc>>("created_at"),
+            updated_at: row.get::<_, Option<DateTime<Utc>>>("updated_at"),
+        })
+    }
+}
+
 /// EMAIL recipients snapshot sent with a delivery.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Recipients {
@@ -55,9 +83,7 @@ impl Recipients {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateTargetRequest {
     pub code: String,
-
     pub channel: Channel,
-
     pub name: String,
 }
 

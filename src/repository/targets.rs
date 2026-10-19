@@ -4,7 +4,7 @@ use deadpool_postgres::Pool;
 
 use crate::{
     enums::Status,
-    models::{CreateTargetRequest, PutTargetRequest, TargetData},
+    models::{CreateTargetRequest, PutTargetRequest, TargetData, TargetInternalData},
 };
 
 use crate::error::{AppError, AppResult};
@@ -34,8 +34,14 @@ impl TargetsRepository {
         let rows = client
             .query(
                 r#"
-                SELECT t.id, t.code, c.code AS channel, t.name, t.status,
-                       t.created_at, t.updated_at
+                SELECT 
+                    t.id, 
+                    t.code, 
+                    c.code AS channel, 
+                    t.name, 
+                    t.status,
+                    t.created_at, 
+                    t.updated_at
                 FROM targets t
                 JOIN channels c ON c.id = t.channel_id
                 ORDER BY t.updated_at, t.created_at
@@ -52,13 +58,34 @@ impl TargetsRepository {
         Ok(PageData::new(items, total))
     }
 
+    pub async fn find_by_list_code(&self, codes: &[String]) -> AppResult<Vec<TargetInternalData>> {
+        let client = self.pool.get().await?;
+        let rows = client
+            .query(
+                r#"
+                SELECT id, code, channel_id, name, status, created_at, updated_at
+                FROM targets
+                WHERE code = ANY($1)
+                "#,
+                &[&codes],
+            )
+            .await?;
+        rows.iter().map(TargetInternalData::map_row).collect()
+    }
+
     pub async fn find_by_code(&self, code: &str) -> AppResult<TargetData> {
         let client = self.pool.get().await?;
         let row = client
             .query_opt(
                 r#"
-                SELECT t.id, t.code, c.code AS channel, t.name, t.status,
-                       t.created_at, t.updated_at
+                SELECT 
+                    t.id, 
+                    t.code, 
+                    c.code AS channel, 
+                    t.name, 
+                    t.status,
+                    t.created_at, 
+                    t.updated_at
                 FROM targets t
                 JOIN channels c ON c.id = t.channel_id
                 WHERE t.code = $1
@@ -75,8 +102,14 @@ impl TargetsRepository {
         let row = client
             .query_opt(
                 r#"
-                SELECT t.id, t.code, c.code AS channel, t.name, t.status,
-                       t.created_at, t.updated_at
+                SELECT 
+                    t.id, 
+                    t.code, 
+                    c.code AS channel, 
+                    t.name, 
+                    t.status,
+                    t.created_at, 
+                    t.updated_at
                 FROM targets t
                 JOIN channels c ON c.id = t.channel_id
                 WHERE t.id = $1

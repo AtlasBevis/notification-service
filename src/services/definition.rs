@@ -1,12 +1,13 @@
 use crate::enums::{Channel, Status};
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    CreateDefinitionRequest, DefinitionData, DefinitionTarget, DefinitionTargetRequest, PageData,
-    PageRequest, PutDefinitionRequest,
+    CreateDefinitionRequest, DefinitionData, DefinitionInternal, DefinitionTarget, PageData,
+    PageRequest, PutDefinitionRequest, TargetInternalData, TemplateData,
 };
 use crate::repository::DefinitionRepository;
 use crate::services::{ChannelTrait, SourceTrait, TargetTrait, TemplateTrait};
 use async_trait::async_trait;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[async_trait]
@@ -28,13 +29,6 @@ pub struct DefinitionService {
     templates: Arc<dyn TemplateTrait>,
 }
 
-/// Ids the source, channel and targets of a definition request resolve to.
-struct ResolvedLinks {
-    source_id: i32,
-    channel_id: i32,
-    targets: Vec<DefinitionTarget>,
-}
-
 impl DefinitionService {
     pub fn new(
         repo: DefinitionRepository,
@@ -52,83 +46,128 @@ impl DefinitionService {
         }
     }
 
-    /// Resolves the codes in the request and applies the rules a send checks
-    /// later, so a definition that is saved can be sent.
-    async fn resolve(
+    async fn validate_create(
         &self,
-        source_code: &str,
-        channel_code: Channel,
+        req: &CreateDefinitionRequest,
+    ) -> AppResult<DefinitionInternal> {
+        self.validate_links(&req.source, req.channel, &req.targets)
+            .await
+    }
+
+    async fn validate_put(&self, req: &PutDefinitionRequest) -> AppResult<DefinitionInternal> {
+        self.validate_links(&req.source, req.channel, &req.targets)
+            .await
+    }
+
+    async fn validate_links(
+        &self,
+        source: &str,
+        channel: Channel,
         items: &[DefinitionTargetRequest],
-    ) -> AppResult<ResolvedLinks> {
-        let source = match self.sources.get_by_code(source_code).await {
+    ) -> AppResult<DefinitionInternal> {
+        // source
+        let source = match self.sources.get_by_code(source).await {
             Ok(source) => source,
             Err(AppError::NotFound(_)) => {
-                return Err(AppError::bad_request(format!(
-                    "unknown source `{}`",
-                    source_code
-                )))
+                return Err(AppError::bad_request(format!("unknown source `{source}`")))
             }
             Err(err) => return Err(err),
         };
+
+        // channel
         let channel = match self.channels.get_by_code(channel_code).await {
             Ok(channel) => channel,
             Err(AppError::NotFound(_)) => {
                 return Err(AppError::bad_request(format!(
-                    "unknown channel `{}`",
-                    channel_code
+                    "unknown channel `{channel_code}`"
                 )))
             }
             Err(err) => return Err(err),
         };
         let is_webhook = channel.code == Channel::WEBHOOK;
 
-        let mut targets = Vec::with_capacity(items.len());
+        // get targets
+        let codes: Vec<String> = items.iter().map(|i| i.target_code.clone()).collect();
+        let found = self.targets.get_by_list_code(&codes).await?;
+        let by_code: HashMap<&str, &TargetInternalData> =
+            found.iter().map(|t| (t.code.as_str(), t)).collect();
+
+        let mut links = Vec::with_capacity(items.len());
+        let mut targets_map = HashMap::with_capacity(items.len());
         for item in items {
-            let target = match self.targets.get_by_code(&item.target_code).await {
-                Ok(target) => target,
-                Err(AppError::NotFound(_)) => {
-                    return Err(AppError::bad_request(format!(
-                        "unknown target `{}`",
-                        item.target_code
-                    )))
-                }
-                Err(err) => return Err(err),
+            let Some(&target) = by_code.get(item.target_code.as_str()) else {
+                return Err(AppError::bad_request(format!(
+                    "unknown target `{}`",
+                    item.target_code
+                )));
             };
-            if target.channel != channel.code {
+            if target.channel_id != channel.id {
                 return Err(AppError::bad_request(format!(
                     "target `{}` does not belong to channel `{}`",
                     target.code, channel.code
                 )));
             }
-            if let Some(template_id) = item.template_id {
-                let template = match self.templates.get_active_by_id(template_id).await {
-                    Ok(template) => template,
-                    Err(AppError::NotFound(msg)) => return Err(AppError::bad_request(msg)),
-                    Err(err) => return Err(err),
-                };
-                if template.is_json() != is_webhook {
-                    return Err(AppError::bad_request(format!(
-                        "template `{}` format `{}` is not valid for channel `{}`",
-                        template.name, template.format, channel.code
-                    )));
-                }
-            }
-            targets.push(DefinitionTarget {
+            links.push(DefinitionTarget {
                 target_id: target.id,
                 template_id: item.template_id,
             });
+            targets_map.insert(target.id, target.clone());
         }
-        if !is_webhook && targets.iter().all(|t| t.template_id.is_none()) {
+
+        // templates: one query for every template_id the targets link to
+        let mut template_ids: Vec<i32> = links.iter().filter_map(|l| l.template_id).collect();
+        template_ids.sort_unstable();
+        template_ids.dedup();
+        let templates: HashMap<i32, TemplateData> = self
+            .templates
+            .get_by_ids(&template_ids)
+            .await?
+            .into_iter()
+            .map(|t| (t.id, t))
+            .collect();
+
+        let mut template_map = HashMap::with_capacity(links.len());
+        for link in &links {
+            let template = match link.template_id {
+                Some(template_id) => {
+                    let Some(template) = templates.get(&template_id) else {
+                        return Err(AppError::bad_request(format!(
+                            "template id `{template_id}` has no ACTIVE version"
+                        )));
+                    };
+                    if template.status != Status::Active {
+                        return Err(AppError::bad_request(format!(
+                            "template id `{template_id}` is not ACTIVE"
+                        )));
+                    }
+                    if template.is_json() != is_webhook {
+                        return Err(AppError::bad_request(format!(
+                            "template `{}` format `{}` is not valid for channel `{}`",
+                            template.name, template.format, channel.code
+                        )));
+                    }
+                    Some(template.clone())
+                }
+                None => None,
+            };
+            template_map.insert(link.target_id, template);
+        }
+
+        if !is_webhook && links.iter().all(|t| t.template_id.is_none()) {
             return Err(AppError::bad_request(format!(
                 "channel `{}` requires a template_id on at least one target",
                 channel.code
             )));
         }
 
-        Ok(ResolvedLinks {
-            source_id: source.id,
-            channel_id: channel.id,
-            targets,
+        Ok(DefinitionInternal {
+            source,
+            channel,
+            targets: DefinitionTargetDataInternal {
+                links,
+                targets_map,
+                template_map,
+            },
         })
     }
 }
@@ -166,12 +205,15 @@ impl DefinitionTrait for DefinitionService {
     }
 
     async fn create(&self, req: CreateDefinitionRequest) -> AppResult<DefinitionData> {
-        let links = self
-            .resolve(&req.source_code, req.channel, &req.targets)
-            .await?;
+        let resolved = self.validate_create(&req).await?;
         match self
             .repo
-            .insert(&req, links.source_id, links.channel_id, &links.targets)
+            .insert(
+                &req,
+                resolved.source.id,
+                resolved.channel.id,
+                &resolved.targets.links,
+            )
             .await
         {
             Ok(row) => Ok(row),
@@ -187,17 +229,15 @@ impl DefinitionTrait for DefinitionService {
     }
 
     async fn update(&self, code: &str, req: PutDefinitionRequest) -> AppResult<DefinitionData> {
-        let links = self
-            .resolve(&req.source_code, req.channel, &req.targets)
-            .await?;
+        let resolved = self.validate_put(&req).await?;
         match self
             .repo
             .update(
                 code,
                 &req,
-                links.source_id,
-                links.channel_id,
-                &links.targets,
+                resolved.source.id,
+                resolved.channel.id,
+                &resolved.targets.links,
             )
             .await
         {

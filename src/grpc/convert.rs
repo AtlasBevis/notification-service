@@ -4,7 +4,7 @@ use prost_types::{ListValue, Struct, Timestamp};
 use serde_json::{Map, Number, Value};
 use tonic::Status;
 
-use crate::enums::Channel;
+use crate::enums::{Channel, Level, Status as RecordStatus};
 use crate::error::{AppError, AppResult};
 
 /// Conversions between protobuf well-known types and the service's models.
@@ -38,6 +38,22 @@ impl ProtoConvert {
         let key = value.trim().to_ascii_uppercase();
         Channel::parse(&key)
             .ok_or_else(|| AppError::bad_request(format!("unknown channel `{}`", value.trim())))
+    }
+
+    /// `status` from a request message (`ACTIVE` / `INACTIVE`).
+    pub fn record_status(value: &str) -> AppResult<RecordStatus> {
+        let key = value.trim().to_ascii_uppercase();
+        match RecordStatus::parse(&key) {
+            Some(status @ (RecordStatus::Active | RecordStatus::Inactive)) => Ok(status),
+            _ => Err(AppError::bad_request("status must be ACTIVE or INACTIVE")),
+        }
+    }
+
+    /// `level` from a request message (`INFO` / `WARN` / `ERROR` / `CRITICAL`).
+    pub fn level(value: &str) -> AppResult<Level> {
+        let key = value.trim().to_ascii_uppercase();
+        Level::parse(&key)
+            .ok_or_else(|| AppError::bad_request("level must be INFO, WARN, ERROR or CRITICAL"))
     }
 
     pub fn map(value: Option<Struct>) -> Map<String, Value> {

@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use crate::enums::Status;
 use crate::error::{AppError, AppResult};
-use crate::models::{CreateTargetRequest, PageData, PageRequest, PutTargetRequest, TargetData};
+use crate::models::{
+    CreateTargetRequest, PageData, PageRequest, PutTargetRequest, TargetData, TargetInternalData,
+};
 use crate::repository::TargetsRepository;
 use crate::services::ChannelTrait;
 
@@ -11,6 +13,7 @@ use crate::services::ChannelTrait;
 #[async_trait]
 pub trait TargetTrait: Send + Sync {
     async fn list(&self, page: PageRequest) -> AppResult<PageData<TargetData>>;
+    async fn get_by_list_code(&self, codes: &[String]) -> AppResult<Vec<TargetInternalData>>;
     async fn get_by_code(&self, code: &str) -> AppResult<TargetData>;
     async fn get_active_by_id(&self, id: i32) -> AppResult<TargetData>;
     async fn create(&self, req: CreateTargetRequest) -> AppResult<()>;
@@ -33,6 +36,10 @@ impl TargetService {
 impl TargetTrait for TargetService {
     async fn list(&self, page: PageRequest) -> AppResult<PageData<TargetData>> {
         self.repo.list_page(&page).await
+    }
+
+    async fn get_by_list_code(&self, codes: &[String]) -> AppResult<Vec<TargetInternalData>> {
+        self.repo.find_by_list_code(codes).await
     }
 
     async fn get_by_code(&self, code: &str) -> AppResult<TargetData> {
