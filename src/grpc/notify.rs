@@ -6,21 +6,21 @@ use super::convert::ProtoConvert;
 use super::pb::notification_server::Notification;
 use super::pb::{NotifyReply, NotifyRequest as NotifyRpcRequest};
 use crate::models::NotifyRequest;
-use crate::services::NotifyTrait;
+use crate::services::NotificationTrait;
 
 pub struct NotifyGrpc {
-    svc: Arc<dyn NotifyTrait>,
+    svc: Arc<dyn NotificationTrait>,
 }
 
 impl NotifyGrpc {
-    pub fn new(svc: Arc<dyn NotifyTrait>) -> Self {
+    pub fn new(svc: Arc<dyn NotificationTrait>) -> Self {
         Self { svc }
     }
 }
 
 #[tonic::async_trait]
 impl Notification for NotifyGrpc {
-    /// Same flow as the HTTP handler `NotifyController::notify`.
+    /// Same flow as the HTTP handler `NotificationController::notify`.
     async fn notify(
         &self,
         request: Request<NotifyRpcRequest>,

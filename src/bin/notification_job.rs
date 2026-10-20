@@ -24,11 +24,11 @@ async fn main() -> AppResult<()> {
     let state = bootstrap::build_state(config)
         .await
         .map_err(|e| AppError::internal_with("Failed to start notification-job", e))?;
-    let consumer = state
-        .consumer_service
+    let notify = state
+        .notify_service
         .clone()
         .ok_or_else(|| AppError::internal("Kafka is required for notification-job"))?;
 
-    consumer.consume().await;
+    notify.consume().await;
     Err(AppError::internal("notification-job stopped"))
 }

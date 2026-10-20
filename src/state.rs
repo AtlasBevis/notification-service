@@ -1,23 +1,23 @@
 use crate::api::{
-    DefinitionController, HealthController, NotifyController, SourceController, TargetController,
-    TemplateController, WebhookController,
+    DefinitionController, HealthController, NotificationController, SourceController,
+    TargetController, TemplateController, WebhookController,
 };
 use crate::grpc::{DefinitionGrpc, NotifyGrpc, SourceGrpc, TargetGrpc, TemplateGrpc, WebhookGrpc};
 use crate::infras::kafka::KafkaBus;
 use crate::infras::postgres::PostgresManager;
-use crate::services::{ChannelTrait, ConsumerTrait, NotifyTrait};
+use crate::services::{ChannelTrait, NotificationTrait, NotifyTrait};
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
     // services
-    pub notify_service: Arc<dyn NotifyTrait>,
-    pub consumer_service: Option<Arc<dyn ConsumerTrait>>,
+    pub notification_service: Arc<dyn NotificationTrait>,
+    pub notify_service: Option<Arc<dyn NotifyTrait>>,
     pub channels_service: Arc<dyn ChannelTrait>,
 
     // controllers
     pub health_controller: Arc<HealthController>,
-    pub notify_controller: Arc<NotifyController>,
+    pub notification_controller: Arc<NotificationController>,
     pub source_controller: Arc<SourceController>,
     pub target_controller: Arc<TargetController>,
     pub template_controller: Arc<TemplateController>,

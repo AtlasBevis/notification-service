@@ -6,14 +6,10 @@ use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use serde_json::Value;
 
 use crate::config::Config;
+use crate::enums::Channel;
 use crate::error::{AppError, AppResult};
 use crate::models::NotifyValue;
-use crate::services::ChannelTrait;
-
-#[async_trait]
-pub trait EmailTrait: Send + Sync {
-    async fn send_email(&self, request: &NotifyValue) -> AppResult<()>;
-}
+use crate::services::{ChannelTrait, NotifierTrait};
 
 #[derive(Clone)]
 pub struct EmailService {
@@ -27,8 +23,12 @@ impl EmailService {
 }
 
 #[async_trait]
-impl EmailTrait for EmailService {
-    async fn send_email(&self, request: &NotifyValue) -> AppResult<()> {
+impl NotifierTrait for EmailService {
+    fn channel(&self) -> Channel {
+        Channel::EMAIL
+    }
+
+    async fn notify(&self, request: &NotifyValue) -> AppResult<()> {
         self.channels.get_active_by_id(request.channel_id).await?;
         let smtp = Config::load().smtp.clone();
         if request.recipients.to.is_empty() {

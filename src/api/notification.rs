@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
 use crate::models::{ApiRequest, ApiResponse, NotifyRequest};
-use crate::services::NotifyTrait;
+use crate::services::NotificationTrait;
 use axum::extract::State;
 
-pub struct NotifyController {
-    svc: Arc<dyn NotifyTrait>,
+pub struct NotificationController {
+    svc: Arc<dyn NotificationTrait>,
 }
 
-impl NotifyController {
-    pub fn new(svc: Arc<dyn NotifyTrait>) -> Self {
+impl NotificationController {
+    pub fn new(svc: Arc<dyn NotificationTrait>) -> Self {
         Self { svc: svc }
     }
 

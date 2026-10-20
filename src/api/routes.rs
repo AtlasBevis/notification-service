@@ -1,6 +1,6 @@
 use crate::api::{
-    DefinitionController, HealthController, NotifyController, SourceController, TargetController,
-    TemplateController, WebhookController,
+    DefinitionController, HealthController, NotificationController, SourceController,
+    TargetController, TemplateController, WebhookController,
 };
 use crate::config::Config;
 use crate::middlewares::{
@@ -54,7 +54,7 @@ fn panic_response(err: Box<dyn Any + Send + 'static>) -> Response {
 
 fn internal_routes(state: &SharedState) -> Router {
     Router::new()
-        .nest(NOTI_API, noti_routes(state.notify_controller.clone()))
+        .nest(NOTI_API, noti_routes(state.notification_controller.clone()))
         .nest(SOURCES_API, source_routes(state.source_controller.clone()))
         .nest(TARGETS_API, target_routes(state.target_controller.clone()))
         .nest(
@@ -82,9 +82,9 @@ fn health_routes(controller: Arc<HealthController>) -> Router {
 }
 
 /// Routes that work on the `notifications` table.
-fn noti_routes(controller: Arc<NotifyController>) -> Router {
+fn noti_routes(controller: Arc<NotificationController>) -> Router {
     Router::new()
-        .route("/notify", post(NotifyController::notify))
+        .route("/notify", post(NotificationController::notify))
         .with_state(controller)
 }
 

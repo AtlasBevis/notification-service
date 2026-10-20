@@ -17,7 +17,7 @@ use crate::models::{
     WebhookAuthConfig, WebhookAuthMode, WebhookConfig, WebhookData, WebhookPayload,
 };
 use crate::repository::WebhookRepository;
-use crate::services::TargetTrait;
+use crate::services::{NotifierTrait, TargetTrait};
 
 const TOKEN_EXPIRY_SKEW: Duration = Duration::from_secs(30);
 
@@ -31,7 +31,6 @@ pub trait WebhookServiceTrait: Send + Sync {
         webhook_config_id: i32,
     ) -> AppResult<WebhookAuthConfig>;
     async fn max_attempts(&self, definition_id: i64) -> AppResult<u32>;
-    async fn send_webhook(&self, request: &NotifyValue) -> AppResult<()>;
     async fn list(&self, page: PageRequest) -> AppResult<PageData<WebhookData>>;
     async fn get_by_target_code(&self, target_code: &str) -> AppResult<WebhookData>;
     async fn create(&self, req: SaveWebhookRequest) -> AppResult<WebhookData>;
@@ -470,48 +469,6 @@ impl WebhookServiceTrait for WebhookService {
             .unwrap_or(1))
     }
 
-    async fn send_webhook(&self, request: &NotifyValue) -> AppResult<()> {
-        let configs = self
-            .repo
-            .find_by_definition_id(request.definition_id)
-            .await?;
-        let mut failures = Vec::new();
-        for config in configs {
-            let result = async {
-                let auth = self.repo.find_auth_by_webhook_config_id(config.id).await?;
-                // A target without a template sends the request variables as-is.
-                let configured_payload = request
-                    .target_payloads
-                    .iter()
-                    .find(|item| item.target_id == config.target_id)
-                    .map(|item| &item.payload);
-                let Some(configured_payload) = configured_payload else {
-                    return self.deliver(&config, &request.variables, &auth).await;
-                };
-                let payload = Self::merge_payload(configured_payload, &request.variables);
-                let payload = payload.as_object().ok_or_else(|| {
-                    AppError::bad_request(format!(
-                        "webhook payload for target `{}` must be a JSON object",
-                        config.target_id
-                    ))
-                })?;
-                self.deliver(&config, payload, &auth).await
-            }
-            .await;
-            if let Err(error) = result {
-                failures.push(format!("{}: {}", config.service_name, error));
-            }
-        }
-        if failures.is_empty() {
-            Ok(())
-        } else {
-            Err(AppError::internal(format!(
-                "webhook delivery failed: {}",
-                failures.join("; ")
-            )))
-        }
-    }
-
     async fn list(&self, page: PageRequest) -> AppResult<PageData<WebhookData>> {
         self.repo.list_page(&page).await
     }
@@ -560,5 +517,54 @@ impl WebhookServiceTrait for WebhookService {
         self.forget_token(&data).await;
         tracing::info!(id = data.id, target = %target_code, "Webhook config deleted");
         Ok(())
+    }
+}
+
+#[async_trait]
+impl NotifierTrait for WebhookService {
+    fn channel(&self) -> Channel {
+        Channel::WEBHOOK
+    }
+
+    async fn notify(&self, request: &NotifyValue) -> AppResult<()> {
+        let configs = self
+            .repo
+            .find_by_definition_id(request.definition_id)
+            .await?;
+        let mut failures = Vec::new();
+        for config in configs {
+            let result = async {
+                let auth = self.repo.find_auth_by_webhook_config_id(config.id).await?;
+                // A target without a template sends the request variables as-is.
+                let configured_payload = request
+                    .target_payloads
+                    .iter()
+                    .find(|item| item.target_id == config.target_id)
+                    .map(|item| &item.payload);
+                let Some(configured_payload) = configured_payload else {
+                    return self.deliver(&config, &request.variables, &auth).await;
+                };
+                let payload = Self::merge_payload(configured_payload, &request.variables);
+                let payload = payload.as_object().ok_or_else(|| {
+                    AppError::bad_request(format!(
+                        "webhook payload for target `{}` must be a JSON object",
+                        config.target_id
+                    ))
+                })?;
+                self.deliver(&config, payload, &auth).await
+            }
+            .await;
+            if let Err(error) = result {
+                failures.push(format!("{}: {}", config.service_name, error));
+            }
+        }
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(AppError::internal(format!(
+                "webhook delivery failed: {}",
+                failures.join("; ")
+            )))
+        }
     }
 }

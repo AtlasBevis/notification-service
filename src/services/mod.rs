@@ -1,5 +1,4 @@
 pub mod channel;
-pub mod consumer;
 pub mod definition;
 pub mod delivery;
 pub mod email;
@@ -12,14 +11,12 @@ pub mod template;
 pub mod webhook;
 
 pub use channel::{ChannelService, ChannelTrait};
-pub use consumer::{ConsumerService, ConsumerTrait};
 pub use definition::{DefinitionService, DefinitionTrait};
 pub use delivery::{DeliveryService, DeliveryTrait};
-pub use email::{EmailService, EmailTrait};
-pub use ms::{MSService, MSTrait};
+pub use email::EmailService;
+pub use ms::MSService;
 pub use notification::{NotificationService, NotificationTrait};
-pub use notify::NotifyService;
-pub use notify::NotifyTrait;
+pub use notify::{NotifierTrait, NotifyService, NotifyTrait};
 pub use source::{SourceService, SourceTrait};
 pub use targets::{TargetService, TargetTrait};
 pub use template::{TemplateService, TemplateTrait};

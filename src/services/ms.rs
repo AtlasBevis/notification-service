@@ -4,17 +4,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
+use crate::enums::Channel;
 use crate::error::{AppError, AppResult};
 use crate::infras::http::HttpClient;
 use crate::models::{NotifyValue, TargetData};
 use crate::services::template::wrap_teams_message;
-use crate::services::{ChannelTrait, TargetTrait};
+use crate::services::{ChannelTrait, NotifierTrait, TargetTrait};
 use crate::utils::JsonUtils;
-
-#[async_trait]
-pub trait MSTrait: Send + Sync {
-    async fn send_teams(&self, request: &NotifyValue) -> AppResult<()>;
-}
 
 #[derive(Clone)]
 pub struct MSService {
@@ -46,8 +42,12 @@ impl MSService {
 }
 
 #[async_trait]
-impl MSTrait for MSService {
-    async fn send_teams(&self, request: &NotifyValue) -> AppResult<()> {
+impl NotifierTrait for MSService {
+    fn channel(&self) -> Channel {
+        Channel::MSTEAMS
+    }
+
+    async fn notify(&self, request: &NotifyValue) -> AppResult<()> {
         self.channels.get_active_by_id(request.channel_id).await?;
         let raw = request
             .message

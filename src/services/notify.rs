@@ -1,278 +1,227 @@
+//! Job side (`notification-job`): consume published notifications and deliver
+//! them through the `NotifierTrait` of their channel.
+
 use crate::config::Config;
 use crate::enums::Channel;
 use crate::error::{AppError, AppResult};
 use crate::infras::kafka::KafkaBus;
-use crate::models::{
-    DefinitionData, DeliveryDraft, NotifyMessage, NotifyRequest, TargetData, TargetPayload,
-    TemplateData,
-};
-use crate::services::{
-    ChannelTrait, DefinitionTrait, DeliveryTrait, NotificationTrait, SourceTrait, TargetTrait,
-    TemplateTrait, WebhookServiceTrait,
-};
+use crate::models::NotifyValue;
+use crate::services::{DeliveryTrait, WebhookServiceTrait};
 use async_trait::async_trait;
-use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::sleep;
 
-/// API side: validate a send request, record it, and publish it to Kafka.
-/// Channels are dispatched by `ConsumerService` in `notification-job`.
+const MAX_ATTEMPTS: u32 = 3;
+
+/// One delivery channel. `NotifyService` (below) picks the notifier whose `channel()`
+/// matches the message; adding a channel means one more implementation here
+/// and one more entry in `bootstrap/build.rs`.
+#[async_trait]
+pub trait NotifierTrait: Send + Sync {
+    /// The channel this notifier delivers.
+    fn channel(&self) -> Channel;
+
+    /// Sends one consumed message to every target it lists.
+    async fn notify(&self, request: &NotifyValue) -> AppResult<()>;
+}
+
+/// Job side: consume published notifications and dispatch them to their channel.
 #[async_trait]
 pub trait NotifyTrait: Send + Sync {
-    async fn validate(&self, request: NotifyRequest) -> AppResult<NotifyMessage>;
-    async fn notify(&self, message: NotifyMessage) -> AppResult<()>;
+    async fn consume(self: Arc<Self>);
 }
 
 #[derive(Clone)]
 pub struct NotifyService {
-    kafka: Option<Arc<KafkaBus>>,
-    definitions: Arc<dyn DefinitionTrait>,
-    sources: Arc<dyn SourceTrait>,
-    channels: Arc<dyn ChannelTrait>,
-    targets: Arc<dyn TargetTrait>,
-    notifications: Arc<dyn NotificationTrait>,
+    kafka: Arc<KafkaBus>,
     deliveries: Arc<dyn DeliveryTrait>,
-    templates: Arc<dyn TemplateTrait>,
+    notifiers: HashMap<Channel, Arc<dyn NotifierTrait>>,
     webhooks: Arc<dyn WebhookServiceTrait>,
-}
-
-impl NotifyService {
-    pub fn new(
-        kafka: Option<Arc<KafkaBus>>,
-        definitions: Arc<dyn DefinitionTrait>,
-        notifications: Arc<dyn NotificationTrait>,
-        deliveries: Arc<dyn DeliveryTrait>,
-        sources: Arc<dyn SourceTrait>,
-        targets: Arc<dyn TargetTrait>,
-        channels: Arc<dyn ChannelTrait>,
-        templates: Arc<dyn TemplateTrait>,
-        webhooks: Arc<dyn WebhookServiceTrait>,
-    ) -> Self {
-        Self {
-            kafka,
-            definitions,
-            notifications,
-            deliveries,
-            sources,
-            targets,
-            channels,
-            templates,
-            webhooks,
-        }
-    }
-
-    async fn build_notify_message(
-        &self,
-        request: &NotifyRequest,
-        definition: &DefinitionData,
-        channel: &crate::models::ChannelData,
-        targets: &[TargetData],
-    ) -> AppResult<NotifyMessage> {
-        let channel_code = channel.code.as_str();
-        let is_webhook = channel.code == Channel::WEBHOOK;
-
-        // A WEBHOOK target sends its own template as the request body; a target
-        // without a template sends the request's variables as the body.
-        let mut resolved: HashMap<i32, TemplateData> = HashMap::new();
-        let mut target_payloads = Vec::new();
-        if is_webhook {
-            for target in &definition.targets {
-                let Some(template_id) = target.template_id else {
-                    continue;
-                };
-                if !resolved.contains_key(&template_id) {
-                    let template = self.templates.get_active_by_id(template_id).await?;
-                    resolved.insert(template_id, template);
-                }
-                target_payloads.push(TargetPayload {
-                    target_id: target.target_id,
-                    payload: resolved[&template_id].json_payload()?,
-                });
-            }
-        }
-
-        // Title and body recorded on the delivery come from the first target
-        // that has a template. A WEBHOOK definition without any template
-        // records the definition name and the variables it sends.
-        let first_template_id = definition
-            .targets
-            .iter()
-            .find_map(|target| target.template_id);
-        let template = match first_template_id {
-            Some(template_id) => {
-                let template = match resolved.remove(&template_id) {
-                    Some(template) => template,
-                    None => self.templates.get_active_by_id(template_id).await?,
-                };
-                if template.is_json() != is_webhook {
-                    return Err(AppError::bad_request(format!(
-                        "template `{}` format `{}` is not valid for channel `{channel_code}`",
-                        template.name, template.format
-                    )));
-                }
-                Some(template)
-            }
-            None if is_webhook => None,
-            None => {
-                return Err(AppError::bad_request(format!(
-                    "definition `{}` has no template",
-                    definition.code
-                )))
-            }
-        };
-
-        // EMAIL recipients and MSTEAMS URLs are not stored yet, so these channels
-        // cannot be delivered; reject them before anything is recorded.
-        if matches!(channel.code, Channel::EMAIL | Channel::MSTEAMS) {
-            return Err(AppError::bad_request(format!(
-                "channel `{channel_code}` is not supported yet"
-            )));
-        }
-        let recipients = crate::models::Recipients::default();
-
-        let (template_name, title, message) = match template {
-            Some(template) => {
-                let (title, message) = template.merge_template(&request.variables);
-                (template.name, title, message)
-            }
-            None => (
-                String::new(),
-                definition.name.clone(),
-                Value::Object(request.variables.clone()).to_string(),
-            ),
-        };
-        Ok(NotifyMessage::with_request(request)
-            .with_definition(definition)
-            .with_channel(channel)
-            .with_targets(targets)
-            .with_target_payloads(target_payloads)
-            .with_template(template_name)
-            .with_recipients(recipients)
-            .with_rendered(title, message))
-    }
 }
 
 #[async_trait]
 impl NotifyTrait for NotifyService {
-    async fn validate(&self, request: NotifyRequest) -> AppResult<NotifyMessage> {
-        // check source
-        let source = self.sources.get_active_by_code(&request.source).await?;
+    async fn consume(self: Arc<Self>) {
+        let topics = vec![Config::load().kafka.topics.notify.clone()];
+        let svc = self.clone();
 
-        // check definition
-        let definition = self.definitions.get_active_by_code(&request.code).await?;
-        if definition.source_id != source.id {
-            return Err(AppError::bad_request(format!(
-                "code `{}` is not valid for source `{}`",
-                definition.code, source.code,
-            )));
-        }
+        self.kafka
+            .clone()
+            .run_consumers(topics, move |topic, partition, offset, value| {
+                let svc = svc.clone();
+                async move {
+                    svc.handle_record(&topic, partition, offset, &value).await;
+                }
+            })
+            .await;
+    }
+}
 
-        // check channel
-        let channel = self
-            .channels
-            .get_active_by_id(definition.channel_id)
-            .await?;
-        let kind = channel.code;
-        if definition.targets.is_empty() {
-            return Err(AppError::bad_request(format!(
-                "definition `{}` has no targets",
-                definition.code
-            )));
+impl NotifyService {
+    pub fn new(
+        kafka: Arc<KafkaBus>,
+        deliveries: Arc<dyn DeliveryTrait>,
+        notifiers: Vec<Arc<dyn NotifierTrait>>,
+        webhooks: Arc<dyn WebhookServiceTrait>,
+    ) -> Self {
+        let notifiers = notifiers.into_iter().map(|n| (n.channel(), n)).collect();
+        Self {
+            kafka,
+            deliveries,
+            notifiers,
+            webhooks,
         }
-        let mut targets = Vec::with_capacity(definition.targets.len());
-        for definition_target in &definition.targets {
-            let target = self
-                .targets
-                .get_active_by_id(definition_target.target_id)
-                .await?;
-            if target.channel != channel.code {
-                return Err(AppError::bad_request(format!(
-                    "target `{}` does not belong to channel `{}`",
-                    target.code, channel.code
-                )));
-            }
-            targets.push(target);
-        }
-        if kind == Channel::WEBHOOK {
-            self.webhooks.validate(&definition).await?;
-        }
-
-        self.build_notify_message(&request, &definition, &channel, &targets)
-            .await
     }
 
-    async fn notify(&self, mut msg: NotifyMessage) -> AppResult<()> {
-        let kafka = self
-            .kafka
-            .as_ref()
-            .ok_or_else(|| AppError::internal("Kafka is not connected; cannot publish"))?;
-
-        let source_code = msg.value.source.clone();
-        let code = msg.value.code.clone();
-        let definition_id = msg.value.definition_id;
-        let trace_id = msg.value.trace_id.clone();
-        let variables = Value::Object(msg.value.variables.clone());
-        let drafts = vec![DeliveryDraft {
-            target_code: msg.value.target.clone(),
-            channel_code: msg.value.channel.as_str().to_string(),
-            title: msg.value.title.clone().unwrap_or_default(),
-            body: msg.value.message.clone().unwrap_or_default(),
-            payload: variables.clone(),
-            destination: serde_json::to_value(&msg.value.recipients)
-                .unwrap_or_else(|_| Value::Object(Default::default())),
-        }];
-
-        let accepted = match self
-            .notifications
-            .accept(
-                definition_id,
-                &source_code,
-                &code,
-                &trace_id,
-                &variables,
-                &drafts,
-            )
-            .await
-        {
-            Ok(row) => row,
-            Err(AppError::Conflict(_)) => {
-                return Err(AppError::conflict(format!(
-                    "notification `{code}` already accepted for trace `{trace_id}`"
-                )));
-            }
-            Err(err) => {
-                tracing::error!(error = %err, code, "accept notification failed");
-                return Err(err);
-            }
+    async fn handle_record(
+        &self,
+        topic: &str,
+        partition: i32,
+        offset: i64,
+        value: &Option<Vec<u8>>,
+    ) {
+        let Some(bytes) = value else {
+            tracing::warn!(%topic, partition, offset, "Empty Kafka record");
+            return;
         };
 
-        msg.value.notification_id = accepted.id;
-        msg.value.delivery_id = accepted.delivery_id;
-        msg.key.notification_id = accepted.id;
-
-        let topic = Config::load().kafka.topics.notify.clone();
-        match kafka
-            .publish(&topic, &msg.key, &msg.value, &msg.value.source)
+        let value = match serde_json::from_slice::<NotifyValue>(bytes) {
+            Ok(value) => value,
+            Err(err) => {
+                tracing::error!(%topic, partition, offset, error = %err, "Invalid notify JSON; skipping");
+                return;
+            }
+        };
+        let delivery_id = value.delivery_id;
+        let max_attempts = self.max_attempts_for(&value).await;
+        match self
+            .retry_dispatch(topic, delivery_id, max_attempts, || {
+                self.dispatch_send(&value)
+            })
             .await
         {
-            Ok((partition, offset)) => {
-                tracing::info!(
-                    topic,
-                    partition,
-                    offset,
-                    trace_id = %msg.value.trace_id,
-                    code = %msg.value.code,
-                    delivery_id = msg.value.delivery_id,
-                    "Notification published"
-                );
+            Ok(()) => {}
+            Err(err) => tracing::error!(error = %err, delivery_id, "delivery failed"),
+        }
+    }
+
+    async fn retry_dispatch<F, Fut>(
+        &self,
+        topic: &str,
+        delivery_id: i64,
+        max_attempts: u32,
+        dispatch: F,
+    ) -> AppResult<()>
+    where
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = AppResult<()>>,
+    {
+        for attempt in 1..=max_attempts.max(1) {
+            match dispatch().await {
+                Ok(()) => {
+                    if let Err(err) = self
+                        .deliveries
+                        .record_attempt(delivery_id, "SENT", "SUCCESS", None)
+                        .await
+                    {
+                        tracing::error!(error = %err, delivery_id, "record successful attempt failed");
+                    }
+                    metrics::counter!(
+                        "notification_consumed_total",
+                        "topic" => topic.to_owned(),
+                        "status" => "ok"
+                    )
+                    .increment(1);
+                    return Ok(());
+                }
+                Err(err) if attempt < max_attempts => {
+                    let error = err.to_string();
+                    let attempt_status = if error.contains("timed out") {
+                        "TIMEOUT"
+                    } else {
+                        "FAILED"
+                    };
+                    if let Err(db) = self
+                        .deliveries
+                        .record_attempt(delivery_id, "RETRY_WAIT", attempt_status, Some(&error))
+                        .await
+                    {
+                        tracing::error!(error = %db, delivery_id, "record retry attempt failed");
+                    }
+                    tracing::warn!(attempt, error = %err, "Dispatch failed; retrying");
+                    sleep(Duration::from_millis(200 * u64::from(attempt))).await;
+                }
+                Err(err) => {
+                    let error = err.to_string();
+                    let attempt_status = if error.contains("timed out") {
+                        "TIMEOUT"
+                    } else {
+                        "FAILED"
+                    };
+                    if let Err(db) = self
+                        .deliveries
+                        .record_attempt(delivery_id, "FAILED", attempt_status, Some(&error))
+                        .await
+                    {
+                        tracing::error!(error = %db, delivery_id, "record failed attempt failed");
+                    }
+                    tracing::error!(error = %err, "Dispatch exhausted retries");
+                    metrics::counter!(
+                        "notification_consumed_total",
+                        "topic" => topic.to_owned(),
+                        "status" => "failed"
+                    )
+                    .increment(1);
+                    return Err(err);
+                }
+            }
+        }
+        Err(AppError::internal("dispatch failed"))
+    }
+
+    async fn max_attempts_for(&self, request: &NotifyValue) -> u32 {
+        if request.channel != Channel::WEBHOOK {
+            return MAX_ATTEMPTS;
+        }
+        match self.webhooks.max_attempts(request.definition_id).await {
+            Ok(attempts) => attempts.max(1),
+            Err(err) => {
+                tracing::warn!(error = %err, "Could not resolve webhook retry policy");
+                1
+            }
+        }
+    }
+
+    async fn dispatch_send(&self, request: &NotifyValue) -> AppResult<()> {
+        let channel = request.channel.as_str();
+        let result = match self.notifiers.get(&request.channel) {
+            Some(notifier) => notifier.notify(request).await,
+            None => Err(AppError::bad_request(format!(
+                "no notifier for channel `{channel}`"
+            ))),
+        };
+
+        match result {
+            Ok(()) => {
+                tracing::info!(source = %request.source, channel, "Channel dispatched");
+                metrics::counter!(
+                    "notification_dispatch_total",
+                    "channel" => channel.to_owned(),
+                    "status" => "ok"
+                )
+                .increment(1);
                 Ok(())
             }
             Err(err) => {
-                tracing::error!(error = %err, code = %msg.value.code, "Kafka publish failed");
-                let _ = self
-                    .deliveries
-                    .record_result(msg.value.delivery_id, "FAILED", Some(&err.to_string()))
-                    .await;
+                tracing::error!(source = %request.source, channel, error = %err, "Channel dispatch failed");
+                metrics::counter!(
+                    "notification_dispatch_total",
+                    "channel" => channel.to_owned(),
+                    "status" => "error"
+                )
+                .increment(1);
                 Err(err)
             }
         }

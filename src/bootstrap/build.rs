@@ -1,6 +1,6 @@
 use crate::api::{
-    DefinitionController, HealthController, NotifyController, SourceController, TargetController,
-    TemplateController, WebhookController,
+    DefinitionController, HealthController, NotificationController, SourceController,
+    TargetController, TemplateController, WebhookController,
 };
 use crate::error::{AppError, AppResult};
 use std::sync::Arc;
@@ -13,8 +13,8 @@ use crate::repository::{
     SourceRepository, TargetsRepository, TemplateRepository, WebhookRepository,
 };
 use crate::services::{
-    ChannelService, ConsumerService, ConsumerTrait, DefinitionService, DeliveryService,
-    EmailService, MSService, NotificationService, NotifyService, SourceService, TargetService,
+    ChannelService, DefinitionService, DeliveryService, EmailService, MSService,
+    NotificationService, NotifierTrait, NotifyService, NotifyTrait, SourceService, TargetService,
     TemplateService, WebhookService,
 };
 use crate::state::{AppState, SharedState};
@@ -68,12 +68,11 @@ pub async fn build_state(config: &Config) -> AppResult<SharedState> {
         targets_service.clone(),
     ));
 
-    let notification_service = Arc::new(NotificationService::new(notifications_repo));
     let delivery_service = Arc::new(DeliveryService::new(deliveries_repo));
-    let notify_service = Arc::new(NotifyService::new(
+    let notification_service = Arc::new(NotificationService::new(
         infras.kafka.clone(),
         definitions_service.clone(),
-        notification_service.clone(),
+        notifications_repo,
         delivery_service.clone(),
         sources_service.clone(),
         targets_service.clone(),
@@ -81,14 +80,17 @@ pub async fn build_state(config: &Config) -> AppResult<SharedState> {
         templates_service.clone(),
         webhook_service.clone(),
     ));
-    let consumer_service = infras.kafka.clone().map(|kafka| {
-        Arc::new(ConsumerService::new(
+    let notify_service = infras.kafka.clone().map(|kafka| {
+        Arc::new(NotifyService::new(
             kafka,
             delivery_service,
-            email_service,
-            teams_service,
+            vec![
+                email_service as Arc<dyn NotifierTrait>,
+                teams_service,
+                webhook_service.clone(),
+            ],
             webhook_service.clone(),
-        )) as Arc<dyn ConsumerTrait>
+        )) as Arc<dyn NotifyTrait>
     });
 
     // controllers
@@ -97,14 +99,15 @@ pub async fn build_state(config: &Config) -> AppResult<SharedState> {
         infras.postgres.clone(),
         infras.kafka.clone(),
     ));
-    let notify_controller = Arc::new(NotifyController::new(notify_service.clone()));
+    let notification_controller =
+        Arc::new(NotificationController::new(notification_service.clone()));
     let source_controller = Arc::new(SourceController::new(sources_service.clone()));
     let target_controller = Arc::new(TargetController::new(targets_service.clone()));
     let template_controller = Arc::new(TemplateController::new(templates_service.clone()));
     let definition_controller = Arc::new(DefinitionController::new(definitions_service.clone()));
 
     // gRPC services
-    let notify_grpc = Arc::new(NotifyGrpc::new(notify_service.clone()));
+    let notify_grpc = Arc::new(NotifyGrpc::new(notification_service.clone()));
     let source_grpc = Arc::new(SourceGrpc::new(sources_service));
     let target_grpc = Arc::new(TargetGrpc::new(targets_service));
     let template_grpc = Arc::new(TemplateGrpc::new(templates_service));
@@ -112,11 +115,11 @@ pub async fn build_state(config: &Config) -> AppResult<SharedState> {
     let webhook_grpc = Arc::new(WebhookGrpc::new(webhook_service));
 
     Ok(Arc::new(AppState {
+        notification_service,
         notify_service,
-        consumer_service,
         channels_service,
         health_controller,
-        notify_controller,
+        notification_controller,
         source_controller,
         target_controller,
         template_controller,

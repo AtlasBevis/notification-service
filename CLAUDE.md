@@ -14,8 +14,10 @@ The project builds two binaries:
 
 | Binary | Config | Role |
 |---|---|---|
-| `data-notification` | `app.yaml` | HTTP + gRPC API. Validates, records, and publishes to Kafka (`NotifyService`). Never calls a channel itself. |
-| `notification-job` | `app-job.yaml` | Kafka consumer. Dispatches to the channel and records the result (`ConsumerService`). |
+| `data-notification` | `app.yaml` | HTTP + gRPC API. Validates, records, and publishes to Kafka (`NotificationService`, `services/notification.rs`). Never calls a channel itself. |
+| `notification-job` | `app-job.yaml` | Kafka consumer. Dispatches to the channel and records the result (`NotifyService`). |
+
+Each channel is a `NotifierTrait` (`src/services/notify.rs`, next to `NotifyService`: `channel()` + `notify(&NotifyValue)`), implemented by `EmailService`, `MSService`, and `WebhookService`. `NotifyService` gets them as a list in `bootstrap/build.rs` and picks the one whose `channel()` matches the message; a new channel is one more implementation plus one entry in that list.
 
 ## Send flow
 

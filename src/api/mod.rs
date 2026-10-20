@@ -1,6 +1,6 @@
 mod definitions;
 mod health;
-mod notify;
+mod notification;
 pub mod routes;
 mod sources;
 mod targets;
@@ -9,7 +9,7 @@ mod webhooks;
 
 pub use definitions::DefinitionController;
 pub use health::HealthController;
-pub use notify::NotifyController;
+pub use notification::NotificationController;
 pub use sources::SourceController;
 pub use targets::TargetController;
 pub use templates::TemplateController;
