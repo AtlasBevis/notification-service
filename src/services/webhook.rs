@@ -30,7 +30,7 @@ pub trait WebhookServiceTrait: Send + Sync {
         &self,
         webhook_config_id: i32,
     ) -> AppResult<WebhookAuthConfig>;
-    async fn max_attempts(&self, definition_id: i64) -> AppResult<u32>;
+    async fn max_attempts(&self, definition_id: i32) -> AppResult<u32>;
     async fn list(&self, page: PageRequest) -> AppResult<PageData<WebhookData>>;
     async fn get_by_target_code(&self, target_code: &str) -> AppResult<WebhookData>;
     async fn create(&self, req: SaveWebhookRequest) -> AppResult<WebhookData>;
@@ -460,7 +460,7 @@ impl WebhookServiceTrait for WebhookService {
             .await
     }
 
-    async fn max_attempts(&self, definition_id: i64) -> AppResult<u32> {
+    async fn max_attempts(&self, definition_id: i32) -> AppResult<u32> {
         let configs = self.repo.find_by_definition_id(definition_id).await?;
         Ok(configs
             .iter()

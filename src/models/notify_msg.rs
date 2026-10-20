@@ -28,7 +28,7 @@ pub struct NotifyValue {
     pub trace_id: String,
     pub code: String,
     pub variables: Map<String, Value>,
-    pub definition_id: i64,
+    pub definition_id: i32,
     pub channel_id: i32,
     pub channel: Channel,
     pub notification_id: i64,

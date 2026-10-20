@@ -210,7 +210,7 @@ impl DefinitionTrait for DefinitionService {
             )
             .await
         {
-            Ok(row) => Ok(row),
+            Ok(id) => self.repo.find_by_id(id).await,
             Err(AppError::Conflict(_)) => Err(AppError::conflict(format!(
                 "definition `{}` already exists",
                 req.code
@@ -236,7 +236,7 @@ impl DefinitionTrait for DefinitionService {
             )
             .await
         {
-            Ok(row) => Ok(row),
+            Ok(id) => self.repo.find_by_id(id).await,
             Err(AppError::NotFound(_)) => Err(AppError::not_found(format!(
                 "definition `{code}` not found"
             ))),

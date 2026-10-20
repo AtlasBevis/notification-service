@@ -6,11 +6,100 @@ use crate::error::{AppError, AppResult};
 use crate::models::{ChannelData, SourceData};
 use crate::utils::StringUtils;
 
-const DEFINITION_CODE_LEN: usize = 50;
+struct DefinitionValidation;
+
+impl DefinitionValidation {
+    const CODE_LEN: usize = 50;
+    const NAME_LEN: usize = 255;
+    const DESCRIPTION_LEN: usize = 255;
+
+    fn code(code: &str) -> AppResult<()> {
+        if code.is_empty() {
+            return Err(AppError::bad_request("code is required"));
+        }
+        if code.len() > Self::CODE_LEN {
+            return Err(AppError::bad_request(format!(
+                "code must be at most {} characters",
+                Self::CODE_LEN
+            )));
+        }
+
+        if !StringUtils::is_valid_code(code) {
+            return Err(AppError::bad_request(
+                "code must be alphanumeric, '_' or '-'",
+            ));
+        }
+        Ok(())
+    }
+
+    fn name(name: &str, description: &Option<String>) -> AppResult<()> {
+        if name.is_empty() {
+            return Err(AppError::bad_request("name is required"));
+        }
+        if name.chars().count() > Self::NAME_LEN {
+            return Err(AppError::bad_request(format!(
+                "name must be at most {} characters",
+                Self::NAME_LEN
+            )));
+        }
+        if let Some(description) = description {
+            if description.chars().count() > Self::DESCRIPTION_LEN {
+                return Err(AppError::bad_request(format!(
+                    "description must be at most {} characters",
+                    Self::DESCRIPTION_LEN
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn status(status: Status) -> AppResult<()> {
+        if !matches!(status, Status::Active | Status::Inactive) {
+            return Err(AppError::bad_request("status must be ACTIVE or INACTIVE"));
+        }
+        Ok(())
+    }
+
+    fn source(source: &str) -> AppResult<()> {
+        if source.is_empty() {
+            return Err(AppError::bad_request("source is required"));
+        }
+        Ok(())
+    }
+
+    fn targets(targets: &[DefinitionTargetRequest]) -> AppResult<()> {
+        if targets.is_empty() {
+            return Err(AppError::bad_request("targets must not be empty"));
+        }
+        for (i, target) in targets.iter().enumerate() {
+            if target.code.is_empty() {
+                return Err(AppError::bad_request("targets.code is required"));
+            }
+            if targets[..i].iter().any(|t| t.code == target.code) {
+                return Err(AppError::bad_request(format!(
+                    "target `{}` is listed more than once",
+                    target.code
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    fn normalize_targets(targets: &mut [DefinitionTargetRequest]) {
+        for target in targets {
+            target.code = target.code.trim().to_ascii_uppercase();
+            target.template_code = target
+                .template_code
+                .take()
+                .map(|c| c.trim().to_ascii_uppercase())
+                .filter(|c| !c.is_empty());
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DefinitionData {
-    pub id: i64,
+    pub id: i32,
     pub code: String,
     pub name: String,
     pub description: Option<String>,
@@ -85,64 +174,15 @@ impl CreateDefinitionRequest {
         self.name = self.name.trim().to_string();
         self.source = self.source.trim().to_ascii_uppercase();
         StringUtils::trim_op(&mut self.description);
-
-        for target in &mut self.targets {
-            target.code = target.code.trim().to_ascii_uppercase();
-            target.template_code = target
-                .template_code
-                .take()
-                .map(|c| c.trim().to_ascii_uppercase())
-                .filter(|c| !c.is_empty());
-        }
+        DefinitionValidation::normalize_targets(&mut self.targets);
     }
 
     pub fn validate(&self) -> AppResult<()> {
-        if self.code.is_empty() {
-            return Err(AppError::bad_request("code is required"));
-        }
-        if self.code.len() > DEFINITION_CODE_LEN {
-            return Err(AppError::bad_request("code must be at most 50 characters"));
-        }
-        if !self
-            .code
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        {
-            return Err(AppError::bad_request(
-                "code must be alphanumeric, '_' or '-'",
-            ));
-        }
-        if self.name.is_empty() {
-            return Err(AppError::bad_request("name is required"));
-        }
-        if self.name.chars().count() > 255 {
-            return Err(AppError::bad_request("name must be at most 255 characters"));
-        }
-        if let Some(description) = &self.description {
-            if description.chars().count() > 255 {
-                return Err(AppError::bad_request(
-                    "description must be at most 255 characters",
-                ));
-            }
-        }
-        if self.source.is_empty() {
-            return Err(AppError::bad_request("source is required"));
-        }
-        if self.targets.is_empty() {
-            return Err(AppError::bad_request("targets must not be empty"));
-        }
-        for (i, target) in self.targets.iter().enumerate() {
-            if target.code.is_empty() {
-                return Err(AppError::bad_request("targets.code is required"));
-            }
-            if self.targets[..i].iter().any(|t| t.code == target.code) {
-                return Err(AppError::bad_request(format!(
-                    "target `{}` is listed more than once",
-                    target.code
-                )));
-            }
-        }
-        Ok(())
+        DefinitionValidation::code(&self.code)?;
+        DefinitionValidation::name(&self.name, &self.description)?;
+        DefinitionValidation::status(self.status)?;
+        DefinitionValidation::source(&self.source)?;
+        DefinitionValidation::targets(&self.targets)
     }
 }
 
@@ -165,53 +205,16 @@ impl PutDefinitionRequest {
         self.name = self.name.trim().to_string();
         self.source = self.source.trim().to_ascii_uppercase();
         StringUtils::trim_op(&mut self.description);
-        for target in &mut self.targets {
-            target.code = target.code.trim().to_ascii_uppercase();
-            target.template_code = target
-                .template_code
-                .take()
-                .map(|c| c.trim().to_ascii_uppercase())
-                .filter(|c| !c.is_empty());
-        }
+        DefinitionValidation::normalize_targets(&mut self.targets);
     }
 
     pub fn validate(&self) -> AppResult<()> {
-        if self.name.is_empty() {
-            return Err(AppError::bad_request("name is required"));
-        }
-        if self.name.chars().count() > 255 {
-            return Err(AppError::bad_request("name must be at most 255 characters"));
-        }
-        if let Some(description) = &self.description {
-            if description.chars().count() > 255 {
-                return Err(AppError::bad_request(
-                    "description must be at most 255 characters",
-                ));
-            }
-        }
+        DefinitionValidation::name(&self.name, &self.description)?;
         if let Some(status) = self.status {
-            if !matches!(status, Status::Active | Status::Inactive) {
-                return Err(AppError::bad_request("status must be ACTIVE or INACTIVE"));
-            }
+            DefinitionValidation::status(status)?;
         }
-        if self.source.is_empty() {
-            return Err(AppError::bad_request("source is required"));
-        }
-        if self.targets.is_empty() {
-            return Err(AppError::bad_request("targets must not be empty"));
-        }
-        for (i, target) in self.targets.iter().enumerate() {
-            if target.code.is_empty() {
-                return Err(AppError::bad_request("targets.code is required"));
-            }
-            if self.targets[..i].iter().any(|t| t.code == target.code) {
-                return Err(AppError::bad_request(format!(
-                    "target `{}` is listed more than once",
-                    target.code
-                )));
-            }
-        }
-        Ok(())
+        DefinitionValidation::source(&self.source)?;
+        DefinitionValidation::targets(&self.targets)
     }
 }
 

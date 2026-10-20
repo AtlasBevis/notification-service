@@ -24,4 +24,8 @@ impl StringUtils {
             }
         }
     }
+
+    pub fn is_valid_code(s: &str) -> bool {
+        s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    }
 }

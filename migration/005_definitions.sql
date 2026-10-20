@@ -2,7 +2,7 @@
 -- level: INFO, WARN, ERROR, CRITICAL
 
 CREATE TABLE definitions (
-  id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id                INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   created_at        timestamptz  NOT NULL DEFAULT now(),
   updated_at        timestamptz,
 
@@ -22,8 +22,8 @@ CREATE TABLE definitions (
 -- sends the notify request's variables as the body.
 -- EMAIL / MSTEAMS render one message from the first target that has a template.
 CREATE TABLE definition_targets (
-  id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  definition_id       BIGINT NOT NULL REFERENCES definitions (id) ON DELETE CASCADE,
+  id                  INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  definition_id       INT NOT NULL REFERENCES definitions (id) ON DELETE CASCADE,
   target_id           INT NOT NULL REFERENCES targets (id) ON DELETE RESTRICT,
   template_id         INT REFERENCES templates (id),
   created_at          timestamptz NOT NULL DEFAULT now()

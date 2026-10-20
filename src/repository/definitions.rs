@@ -48,7 +48,7 @@ impl DefinitionRepository {
         }
     }
 
-    pub async fn find_by_id(&self, id: i64) -> AppResult<DefinitionData> {
+    pub async fn find_by_id(&self, id: i32) -> AppResult<DefinitionData> {
         let client = self.pool.get().await?;
         let sql = r#"
             SELECT d.id, d.code, d.name, d.status, d.description, d.level,
@@ -137,7 +137,7 @@ impl DefinitionRepository {
         channel_id: i32,
         target_ids: &[i32],
         template_ids: &[Option<i32>],
-    ) -> AppResult<DefinitionData> {
+    ) -> AppResult<i32> {
         let mut client = self.pool.get().await?;
         let tx = client.transaction().await?;
 
@@ -159,12 +159,11 @@ impl DefinitionRepository {
                 ],
             )
             .await?;
-        let id: i64 = row.get("id");
+        let id: i32 = row.get("id");
 
         Self::insert_targets(&tx, id, target_ids, template_ids).await?;
-        let data = Self::find_in_tx(&tx, id).await?;
         tx.commit().await?;
-        Ok(data)
+        Ok(id)
     }
 
     /// Replaces the definition's fields and its linked targets. An omitted
@@ -177,7 +176,7 @@ impl DefinitionRepository {
         channel_id: i32,
         target_ids: &[i32],
         template_ids: &[Option<i32>],
-    ) -> AppResult<DefinitionData> {
+    ) -> AppResult<i32> {
         let mut client = self.pool.get().await?;
         let tx = client.transaction().await?;
 
@@ -208,7 +207,7 @@ impl DefinitionRepository {
             )
             .await?;
         let row = row.ok_or_else(|| AppError::not_found(format!("code {code} not found")))?;
-        let id: i64 = row.get("id");
+        let id: i32 = row.get("id");
 
         tx.execute(
             r#"
@@ -219,9 +218,8 @@ impl DefinitionRepository {
         )
         .await?;
         Self::insert_targets(&tx, id, target_ids, template_ids).await?;
-        let data = Self::find_in_tx(&tx, id).await?;
         tx.commit().await?;
-        Ok(data)
+        Ok(id)
     }
 
     /// `definition_targets` rows go with it (`ON DELETE CASCADE`).
@@ -247,7 +245,7 @@ impl DefinitionRepository {
     /// `definition_targets.id` order decides which template EMAIL / MSTEAMS render.
     async fn insert_targets(
         tx: &Transaction<'_>,
-        definition_id: i64,
+        definition_id: i32,
         target_ids: &[i32],
         template_ids: &[Option<i32>],
     ) -> AppResult<()> {
@@ -258,43 +256,23 @@ impl DefinitionRepository {
         }
         tx.execute(
             r#"
-            INSERT INTO definition_targets (definition_id, target_id, template_id)
-            SELECT $1, t.target_id, t.template_id
-            FROM unnest($2::int[], $3::int[]) WITH ORDINALITY AS t (target_id, template_id, ord)
-            ORDER BY t.ord
+            INSERT INTO definition_targets (
+                definition_id, 
+                target_id, 
+                template_id
+            )
+            SELECT 
+                $1, 
+                t.target_id, 
+                t.template_id
+            FROM unnest(
+                $2::int[], 
+                $3::int[]
+            ) AS t (target_id, template_id)
             "#,
             &[&definition_id, &target_ids, &template_ids],
         )
         .await?;
         Ok(())
-    }
-
-    async fn find_in_tx(tx: &Transaction<'_>, id: i64) -> AppResult<DefinitionData> {
-        let sql = r#"
-            SELECT d.id, d.code, d.name, d.status, d.description, d.level,
-                   d.source_id, d.channel_id, d.created_at, d.updated_at,
-                   (
-                       SELECT COALESCE(
-                           jsonb_agg(
-                               jsonb_build_object(
-                                   'target_id', t.id,
-                                   'code', t.code,
-                                   'template_id', dt.template_id,
-                                   'template_code', tp.code
-                               )
-                               ORDER BY dt.id
-                           ),
-                           '[]'::jsonb
-                       )
-                       FROM definition_targets dt
-                       JOIN targets t ON t.id = dt.target_id
-                       LEFT JOIN templates tp ON tp.id = dt.template_id
-                       WHERE dt.definition_id = d.id
-                   ) AS targets
-            FROM definitions d
-            WHERE d.id = $1
-            "#;
-        let row = tx.query_one(sql, &[&id]).await?;
-        DefinitionData::map_row(&row)
     }
 }

@@ -20,7 +20,7 @@ impl NotificationsRepository {
     /// Insert the runtime request and one delivery per route in one transaction.
     pub async fn accept(
         &self,
-        definition_id: i64,
+        definition_id: i32,
         source_code: &str,
         code: &str,
         trace_id: &str,

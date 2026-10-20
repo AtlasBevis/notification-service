@@ -44,7 +44,7 @@ impl WebhookRepository {
         WebhookConfig::map_row(&row)
     }
 
-    pub async fn find_by_definition_id(&self, definition_id: i64) -> AppResult<Vec<WebhookConfig>> {
+    pub async fn find_by_definition_id(&self, definition_id: i32) -> AppResult<Vec<WebhookConfig>> {
         let client = self.pool.get().await?;
         let rows = client
             .query(

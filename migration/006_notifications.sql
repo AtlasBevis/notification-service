@@ -9,7 +9,7 @@ CREATE TABLE notifications (
 
   code              VARCHAR(50)  NOT NULL,
   trace_id          VARCHAR(100) NOT NULL,
-  definition_id     BIGINT,
+  definition_id     INT,
   source            VARCHAR(50),
   variables         JSONB        NOT NULL DEFAULT '{}'::jsonb,
   CONSTRAINT uq_noti_source UNIQUE (source, trace_id)
