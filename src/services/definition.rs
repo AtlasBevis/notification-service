@@ -86,19 +86,22 @@ impl DefinitionService {
         };
         let is_webhook = channel.code == Channel::WEBHOOK;
 
-        // targets: one query for every target code
+        // get targets
         let codes: Vec<String> = items.iter().map(|i| i.code.clone()).collect();
+        // get list code
         let found = self.targets.get_by_list_code(&codes).await?;
+        // map
         let target_map: HashMap<&str, &TargetInternalData> =
             found.iter().map(|t| (t.code.as_str(), t)).collect();
 
-        // templates: one query for every template code the targets link to
+        // get templates
         let mut template_codes: Vec<String> = items
             .iter()
             .filter_map(|i| i.template_code.clone())
             .collect();
-        template_codes.sort_unstable();
         template_codes.dedup();
+
+        // get templates by codes
         let templates = self.templates.get_by_codes(&template_codes).await?;
         let template_map: HashMap<&str, &TemplateData> =
             templates.iter().map(|t| (t.code.as_str(), t)).collect();
