@@ -29,7 +29,7 @@ impl Config {
         let content = fs::read_to_string(&path).map_err(|e| {
             AppError::internal_with(format!("Failed to read config file `{path}`"), e)
         })?;
-        let mut config: Config = serde_norway::from_str(&content).map_err(|e| {
+        let mut config: Config = serde_yaml_ng::from_str(&content).map_err(|e| {
             AppError::internal_with(format!("Failed to parse config file `{path}`"), e)
         })?;
         config.apply_secrets();
